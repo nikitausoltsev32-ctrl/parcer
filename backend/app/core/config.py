@@ -16,9 +16,6 @@ class Settings(BaseSettings):
 
     # Database / Storage
     database_url: str = "postgresql+asyncpg://postgres:changeme@localhost:5432/postgres"
-    # Direct (non-pooler) URL for procrastinate worker — required for LISTEN/NOTIFY.
-    # If not set, falls back to database_url (polling mode, works with pgbouncer).
-    worker_database_url: str = ""
     supabase_url: str = ""
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
@@ -40,6 +37,7 @@ class Settings(BaseSettings):
     qwen_api_key: str = ""
     glm_api_key: str = ""
     anthropic_api_key: str = ""
+    openrouter_api_key: str = ""
 
     # Search
     twogis_api_key: str = ""
@@ -55,12 +53,5 @@ class Settings(BaseSettings):
 
     # Monitoring
     sentry_dsn: str = ""
-
-    @property
-    def effective_worker_database_url(self) -> str:
-        """Plain postgres:// URL for procrastinate (strips asyncpg driver prefix)."""
-        url = self.worker_database_url or self.database_url
-        return url.replace("postgresql+asyncpg://", "postgresql://")
-
 
 settings = Settings()

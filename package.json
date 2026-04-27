@@ -1,0 +1,14 @@
+{
+  "name": "parcer",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "cd backend && python -m uvicorn app.main:app --reload --port 8000",
+    "dev:web": "cd frontend && npm run dev",
+    "dev:worker": "cd backend && python -m procrastinate --app app.workers.main.app worker",
+    "install": "cd frontend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

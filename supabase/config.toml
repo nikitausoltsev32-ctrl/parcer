@@ -1,0 +1,10 @@
+# Supabase CLI project config. Fill project_id after `supabase link`.
+project_id = "fzmkitxhtwkdcupuqqtd"
+
+[db]
+port = 54322
+
+[api]
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public"]
