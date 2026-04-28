@@ -4,7 +4,7 @@ help:
 	@echo "Targets:"
 	@echo "  install          Install backend (editable) and frontend deps"
 	@echo "  dev-api          Run FastAPI with --reload"
-	@echo "  dev-worker       Run ARQ worker"
+	@echo "  dev-worker       Run Procrastinate worker"
 	@echo "  dev-web          Run Vite dev server"
 	@echo "  test             Run backend pytest"
 	@echo "  lint             Run ruff check"

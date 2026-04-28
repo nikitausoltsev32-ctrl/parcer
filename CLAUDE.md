@@ -1,10 +1,10 @@
-# CLAUDE.md
+rf# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project
 
-**parcer** (кодовое название) — AI-менеджер по продажам для малого бизнеса в РФ. Главный экран — чат с AI-ассистентом (tool-calling); параллельно есть классические экраны (CRM, Campaigns, Inbox). Язык UI и писем — русский.
+**Лида AI** — ИИ-агент по продажам для вашего бизнеса в РФ. Старое кодовое имя: `parcer`, только для репозитория и технического контекста. Главный экран — чат с Лидой (tool-calling); параллельно есть классические экраны (CRM, Campaigns, Inbox). Язык UI и писем — русский.
 
 **НЕ** называть продукт парсером/скрапером. НЕ позиционировать как инструмент массовой холодной рассылки.
 
@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 pip install -e ".[dev]"
 uvicorn app.main:app --reload         # dev API
-python -m arq app.workers.main.WorkerSettings   # dev worker
+python -m procrastinate --app app.workers.main.app worker   # dev worker
 ruff check .
 ruff format .
 pytest tests/ -v
@@ -46,12 +46,12 @@ supabase db reset
 
 **Cloud-first dev, без локального Docker:**
 - Postgres + Storage — Supabase (облако).
-- Redis — Upstash (serverless).
-- Локально крутятся только uvicorn, ARQ worker, Vite dev-server.
+- Очереди — Procrastinate в Supabase Postgres.
+- Локально крутятся только uvicorn, Procrastinate worker, Vite dev-server.
 
-**Стек:** FastAPI + SQLAlchemy async + ARQ (на Upstash Redis) → Supabase Postgres; React + Vite + TypeScript + Tailwind + shadcn/ui; LLM — Qwen (DashScope) + Groq + GLM через OpenAI-совместимый SDK.
+**Стек:** FastAPI + SQLAlchemy async + Procrastinate → Supabase Postgres; React + Vite + TypeScript + Tailwind + shadcn/ui; текущий dev chat LLM — Groq `llama-3.3-70b-versatile`, Qwen/GLM остаются резервными провайдерами для отдельных задач.
 
-**Главный интерфейс** — чат с AI-ассистентом через SSE-стрим. Ассистент вызывает инструменты (search_companies, create_campaign, generate_letters, send_campaign, check_inbox, add_note, set_reminder и т.д.). Классические экраны (CRM, Campaigns, Inbox, Templates, SMTP) — параллельно.
+**Главный интерфейс** — чат с Лидой через SSE-стрим. ИИ-агент вызывает инструменты (search_companies, create_campaign, generate_letters, send_campaign, check_inbox, add_note, set_reminder и т.д.). Классические экраны (CRM, Campaigns, Inbox, Templates, SMTP) — параллельно.
 
 ```
 backend/
@@ -59,7 +59,7 @@ backend/
     api/v1/       # тонкие роутеры; бизнес-логика вызывается из services/
     core/         # config, database, security, tokens, email
     services/     # auth_service, llm/ (base, qwen, glm, groq, factory), chat/ (agent, tools), crm/, inbox/, letters/
-    workers/      # ARQ задачи: generate_letters, send_email, poll_inbox, classify_inbox, run_followup, run_reminders
+    workers/      # Procrastinate задачи: generate_letters, send_email, poll_inbox, classify_inbox, run_followup, run_reminders
     models/       # SQLAlchemy ORM — User, Company, Contact, ContactList, Activity, SmtpAccount, Suppression, Template, Campaign, CampaignMessage, InboxMessage, ChatSession, ChatMessage, Reminder, Event
     schemas/      # Pydantic
 frontend/

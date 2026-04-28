@@ -1,10 +1,26 @@
 """Procrastinate worker entry point. Task implementations live in app.services."""
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
 import procrastinate
 
 from app.core.config import settings
 
+
+def _psycopg_conninfo(database_url: str | None = None) -> str:
+    url = database_url or settings.database_url
+    if url.startswith("postgresql+asyncpg://"):
+        url = url.replace("postgresql+asyncpg://", "postgresql://", 1)
+
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query.pop("pgbouncer", None)
+    query.setdefault("sslmode", "require")
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
 app = procrastinate.App(
     connector=procrastinate.PsycopgConnector(
+        conninfo=_psycopg_conninfo(),
         json_dumps=None,
         json_loads=None,
     )

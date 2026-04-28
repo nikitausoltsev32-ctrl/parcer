@@ -18,6 +18,7 @@ frontend/.vite/
 .env
 .env.local
 .env.*.local
+supabase/.temp/
 
 # Docker
 *.log

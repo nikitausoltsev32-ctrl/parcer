@@ -60,7 +60,10 @@ async def test_enrich_contact_success(monkeypatch, db_session, mock_contact):
     await db_session.commit()
 
     fake_scraped = "Компания Example — делает виджеты для B2B."
-    fake_summary = '{"description": "Делает виджеты для B2B.", "services": "Виджеты", "target": "B2B компании", "city": null}'
+    fake_summary = (
+        '{"description": "Делает виджеты для B2B.", "services": "Виджеты", '
+        '"target": "B2B компании", "city": null}'
+    )
 
     with patch("app.services.enrichment._scrape_website", new=AsyncMock(return_value=fake_scraped)), \
          patch("app.services.enrichment._llm_summarize", new=AsyncMock(return_value=fake_summary)):

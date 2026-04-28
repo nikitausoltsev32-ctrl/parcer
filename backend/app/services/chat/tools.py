@@ -21,7 +21,7 @@ TOOLS_SCHEMA: list[dict] = [
             "name": "search_companies",
             "description": (
                 "Найти компании по запросу пользователя в публичных источниках. "
-                "Используй когда пользователь хочет найти клиентов."
+                "Используй когда пользователь явно просит найти клиентов или компании."
             ),
             "parameters": {
                 "type": "object",
@@ -70,93 +70,10 @@ TOOLS_SCHEMA: list[dict] = [
     {
         "type": "function",
         "function": {
-            "name": "create_campaign",
-            "description": "Создать черновик рассылки по списку контактов.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "list_id": {"type": "string"},
-                    "template_id": {"type": "string"},
-                    "tone": {"type": "string", "enum": ["formal", "friendly", "expert"]},
-                    "smtp_account_id": {"type": "string"},
-                },
-                "required": ["list_id", "template_id", "smtp_account_id"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "generate_letters",
-            "description": "Сгенерировать письма для кампании.",
-            "parameters": {
-                "type": "object",
-                "properties": {"campaign_id": {"type": "string"}},
-                "required": ["campaign_id"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "send_campaign",
-            "description": "Запустить отправку кампании.",
-            "parameters": {
-                "type": "object",
-                "properties": {"campaign_id": {"type": "string"}},
-                "required": ["campaign_id"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "check_inbox",
-            "description": "Проверить новые входящие с AI-классификацией.",
-            "parameters": {
-                "type": "object",
-                "properties": {"campaign_id": {"type": "string"}, "classification": {"type": "string"}},
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "update_contact",
-            "description": "Обновить поля контакта: status, next_step, notes.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "contact_id": {"type": "string"},
-                    "fields": {"type": "object"},
-                },
-                "required": ["contact_id", "fields"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "set_reminder",
-            "description": "Поставить напоминание по контакту.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "contact_id": {"type": "string"},
-                    "remind_at": {"type": "string", "format": "date-time"},
-                    "action": {"type": "string"},
-                },
-                "required": ["contact_id", "remind_at", "action"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "enrich_contacts",
             "description": (
                 "Запустить обогащение контактов: Firecrawl + LLM анализ сайтов. "
-                "Используй когда пользователь хочет узнать больше о компаниях в списке."
+                "Используй когда пользователь явно просит узнать больше о компаниях в списке."
             ),
             "parameters": {
                 "type": "object",

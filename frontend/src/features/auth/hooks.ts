@@ -31,7 +31,7 @@ export function useRegister() {
     mutationFn: (data: { email: string; password: string; full_name?: string; llm_consent: boolean }) =>
       api.post("/auth/register", data).then((r) => r.data),
     onSuccess: () => {
-      navigate("/verify-email?sent=1");
+      navigate("/login?registered=1");
     },
   });
 }
@@ -51,7 +51,7 @@ export function useLogout() {
     onSettled: () => {
       clearToken();
       qc.clear();
-      navigate("/login");
+      navigate("/app");
     },
   });
 }

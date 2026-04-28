@@ -46,7 +46,7 @@ async def verify_user_email(db: AsyncSession, token: str) -> None:
     user_id = await consume_token(db, "verify_email", token)
     if not user_id:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -86,7 +86,7 @@ async def reset_user_password(db: AsyncSession, token: str, new_password: str) -
     user_id = await consume_token(db, "reset_password", token)
     if not user_id:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

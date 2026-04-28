@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -22,9 +22,8 @@ async def store_token_for(db: AsyncSession, prefix: str, value: str, ttl_seconds
 async def consume_token(db: AsyncSession, prefix: str, token: str) -> str | None:
     now = datetime.now(UTC)
     result = await db.execute(
-        select(text("value")).select_from(text("token_store")).where(
-            text("token = :token AND prefix = :prefix AND expires_at > :now")
-        ).bindparams(token=token, prefix=prefix, now=now)
+        text("SELECT value FROM token_store WHERE token = :token AND prefix = :prefix AND expires_at > :now"),
+        {"token": token, "prefix": prefix, "now": now},
     )
     row = result.first()
     if not row:

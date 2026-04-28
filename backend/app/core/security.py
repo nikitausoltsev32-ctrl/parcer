@@ -7,7 +7,7 @@ from app.core.config import settings
 
 _pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
-ACCESS_TOKEN_EXPIRE_MINUTES = 15
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24h for MVP
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 

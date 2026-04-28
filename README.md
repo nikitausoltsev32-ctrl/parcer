@@ -1,6 +1,6 @@
-# parcer (рабочее название)
+# Лида AI
 
-AI-менеджер по продажам для малого бизнеса: находит компании, пишет персональные письма, ведёт CRM и обрабатывает ответы. Главный интерфейс — чат с AI-ассистентом.
+ИИ-агент по продажам для вашего бизнеса: находит компании, пишет персональные письма, ведёт CRM и обрабатывает ответы. Главный интерфейс — чат с Лидой.
 
 ## Документация
 - **[docs/PROJECT.md](docs/PROJECT.md)** — единый документ: позиционирование, scope, архитектура, БД, API, промпты, roadmap.
@@ -9,7 +9,7 @@ AI-менеджер по продажам для малого бизнеса: н
 - **[docs/legal/](docs/legal/)** — drafts оферты, политики ПДн, согласий.
 
 ## Стек
-Python 3.12 · FastAPI · SQLAlchemy async · ARQ · React 18 · Vite · TypeScript · Tailwind · shadcn/ui · Supabase (Postgres + Storage) · Upstash Redis · Qwen / Groq / GLM.
+Python 3.12 · FastAPI · SQLAlchemy async · Procrastinate · React 18 · Vite · TypeScript · Tailwind · shadcn/ui · Supabase (Postgres + Storage) · Groq · Qwen / GLM.
 
 ## Быстрый старт (локальная разработка без Docker)
 
@@ -20,7 +20,7 @@ supabase login
 supabase link --project-ref <your-ref>
 
 cp .env.example .env
-# заполнить SUPABASE_*, REDIS_URL (Upstash), QWEN_API_KEY, GROQ_API_KEY, GLM_API_KEY,
+# заполнить SUPABASE_*, OPENROUTER_API_KEY или LLM API keys,
 # SECRET_KEY, FERNET_KEY, TRACKING_SECRET
 
 cd backend && pip install -e ".[dev]"
@@ -31,7 +31,7 @@ supabase db push
 
 # dev (3 терминала — или используйте make)
 make dev-api         # uvicorn, порт 8000
-make dev-worker      # ARQ worker
+make dev-worker      # Procrastinate worker
 make dev-web         # vite, порт 5173
 ```
 
@@ -57,7 +57,7 @@ backend/
     api/v1/       # FastAPI роутеры (тонкие)
     core/         # config, database, security, tokens, email
     services/     # бизнес-логика (auth, llm, chat, crm, inbox, letters)
-    workers/      # ARQ задачи
+    workers/      # Procrastinate задачи
     models/       # SQLAlchemy
     schemas/      # Pydantic
   tests/

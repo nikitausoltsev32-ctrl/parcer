@@ -16,9 +16,12 @@ def send_email(to: str, subject: str, html_body: str) -> None:
     msg["To"] = to
     msg.attach(MIMEText(html_body, "html"))
     ctx = ssl.create_default_context()
-    with smtplib.SMTP_SSL(settings.transactional_smtp_host, settings.transactional_smtp_port, context=ctx) as server:
-        server.login(settings.transactional_smtp_user, settings.transactional_smtp_pass)
-        server.sendmail(settings.transactional_from_email, to, msg.as_string())
+    try:
+        with smtplib.SMTP_SSL(settings.transactional_smtp_host, settings.transactional_smtp_port, context=ctx) as server:
+            server.login(settings.transactional_smtp_user, settings.transactional_smtp_pass)
+            server.sendmail(settings.transactional_from_email, to, msg.as_string())
+    except Exception as e:
+        print(f"[EMAIL ERROR] To: {to} | {e}\nSubject: {subject}\n{html_body}\n")
 
 
 def send_verify_email(to: str, token: str) -> None:

@@ -6,9 +6,9 @@
 
 ## 1. Позиционирование
 
-**Продукт:** AI-менеджер по продажам для малого бизнеса (РФ).
+**Продукт:** Лида AI — ИИ-агент по продажам для вашего бизнеса (РФ).
 
-**Рабочее название (кодовое):** `parcer` — только в коде и репо. Публичный бренд будет выбран отдельно.
+**Публичный бренд:** `Лида AI`. Короткое имя в интерфейсе и сообщениях — `Лида`. Старое кодовое имя `parcer` допустимо только в коде, репозитории и технических следах.
 
 ### Что продукт делает
 - Помогает найти компании, которым полезен ваш оффер (через импорт CSV, публичные справочники, ручной ввод).
@@ -29,7 +29,7 @@
 - Общий признак: нет опыта outreach, нет CRM, нет бюджета на западные SalesOS.
 
 ### Ценностное предложение
-«Расскажите, кого ищете — AI найдёт компании, напишет персональные письма и будет вести их вплоть до первого ответа. Вы остаётесь главным.»
+«Расскажите, кого ищете — Лида найдёт компании, напишет персональные письма и будет вести их вплоть до первого ответа. Вы остаётесь главным.»
 
 ### Юр-контур
 - Все пользовательские данные хранятся в Supabase (РФ-регион, если доступно; иначе — с явным warning). 152-ФЗ.
@@ -189,10 +189,10 @@
 ## 5. Архитектура
 
 ### Стек
-- **Backend:** Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 async, ARQ (очередь).
+- **Backend:** Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 async, Procrastinate (очередь).
 - **Frontend:** React 18 + Vite + TypeScript, Tailwind, shadcn/ui, TanStack Query, React Router, SSE для чата.
-- **Хранилища:** Supabase Postgres, Supabase Storage (bucket `parcer-<env>`), Upstash Redis.
-- **LLM:** Qwen 2.5 72B (DashScope), Llama 3.3 70B (Groq), GLM-4 (Zhipu) — все через OpenAI-совместимый SDK.
+- **Хранилища:** Supabase Postgres, Supabase Storage (bucket `parcer-<env>`).
+- **LLM:** текущий dev chat — Groq `llama-3.3-70b-versatile`; Qwen/GLM остаются резервными провайдерами для отдельных задач.
 - **Email:** SMTP/IMAP пользователя; транзакционные письма (verify, reset) через Unisender Go.
 - **Биллинг:** ЮKassa, подключается после MVP.
 - **Деплой:** VPS (Selectel/VK) + Caddy (TLS, static) — на prod. Локально: без Docker.
@@ -210,10 +210,11 @@
         │
    ┌────┼───────────────────────────┐
    ▼    ▼                           ▼
-Supabase  Upstash Redis        LLM APIs (Qwen/Groq/GLM)
-(PG+Storage)   │                   SMTP/IMAP (ящик юзера)
-               ▼                   Unisender Go (transact)
-        ARQ workers
+Supabase                      LLM APIs (Groq, Qwen, GLM)
+(PG+Storage)                  SMTP/IMAP (ящик юзера)
+   │                          Unisender Go (transact)
+   ▼
+        Procrastinate workers
         ├─ chat_agent
         ├─ generate_letters
         ├─ send_email
@@ -249,14 +250,14 @@ Supabase  Upstash Redis        LLM APIs (Qwen/Groq/GLM)
 
 ### Деплой (prod, будущее)
 - VPS 4 vCPU / 8 GB / 80 GB SSD (Selectel/TimeWeb/VK Cloud).
-- Docker Compose на VPS: `caddy` + `api` + `worker`. Postgres и Redis — не локально, а Supabase + Upstash.
+- Docker Compose на VPS: `caddy` + `api` + `worker`. Postgres — Supabase, очереди — Procrastinate в Postgres.
 - Образы из GHCR, push в registry через GitHub Actions.
 - Бэкапы Postgres — через Supabase (point-in-time recovery на Pro).
 - Логи — в Sentry + docker logs.
 
 ### Масштабирование (после 500 MAU)
 - Разделить воркеры по типам задач.
-- Upstash Pay-as-you-go.
+- Supabase Pro / Postgres queue capacity.
 - Supabase Pro.
 - Горизонтальный скейл API через N uvicorn инстансов за Caddy.
 
@@ -482,6 +483,14 @@ Unique: `(user_id, email)`.
 | output | jsonb | |
 | created_at | timestamptz | TTL 7 дней |
 
+### token_store
+| Поле | Тип | |
+|---|---|---|
+| token | text pk | verify/reset token |
+| prefix | text | `verify_email\|reset_password` |
+| value | text | user id |
+| expires_at | timestamptz | |
+
 ### RLS-политики
 Каждая таблица с `user_id`: `policy user_isolation for all using (user_id = auth.uid())`.
 
@@ -499,6 +508,8 @@ Unique: `(user_id, email)`.
 ## 7. Структура API
 
 REST + JSON, префикс `/api/v1`. Auth: `Authorization: Bearer <access>`, refresh — httpOnly cookie. Ошибки: `{"error": {"code", "message"}}`.
+
+Текущий статус реализации: Auth и Chat частично рабочие; большинство CRM/Campaigns/Inbox/SMTP/Templates endpoints пока объявлены, но возвращают 501.
 
 ### Auth
 - `POST /auth/register`
@@ -590,7 +601,7 @@ REST + JSON, префикс `/api/v1`. Auth: `Authorization: Bearer <access>`, r
 
 **Системный промпт:**
 ```
-Ты — AI-менеджер по продажам для малого бизнеса в России.
+Ты — Лида, ИИ-агент по продажам для бизнеса пользователя в России.
 Помогаешь пользователю: искать компании-клиенты, писать персональные письма,
 вести CRM, отвечать на входящие. Работаешь через вызов функций (tools).
 
@@ -744,7 +755,7 @@ LLM_CLASSIFY_MODEL=llama-3.1-8b-instant
 
 Горизонт: ~20 недель до платящих.
 
-**Фаза 0 — Подготовка (1 нед):** бренд/домен, юр-форма, оферта/политика, репо+CI, Supabase+Upstash+подписка на LLM-провайдеров, дизайнер на пол-ставки.
+**Фаза 0 — Подготовка (1 нед):** бренд/домен, юр-форма, оферта/политика, репо+CI, Supabase+подписка на LLM-провайдеров, дизайнер на пол-ставки.
 
 **Фаза 1 — Каркас и auth (2 нед):** миграции (users/companies/contacts/smtp/...), регистрация/логин/verify/reset, chat-layout, левое меню. **Веха:** логин работает.
 
@@ -776,7 +787,7 @@ LLM_CLASSIFY_MODEL=llama-3.1-8b-instant
 **Техника:**
 - [ ] Прогнать Qwen/Groq/GLM на 10 тестах (письма на русском, классификация) → зафиксировать выбор.
 - [ ] Supabase проект создан, `supabase link`, applying первой миграции.
-- [ ] Upstash Redis подключён, `REDIS_URL` в `.env`.
+- [ ] Procrastinate миграции применены и worker запускается.
 - [ ] `make dev-api`, `make dev-worker`, `make dev-web` — работают локально.
 
 **Дизайн:**
@@ -821,14 +832,14 @@ supabase link --project-ref <ref>
 
 # .env
 cp .env.example .env
-# заполнить SUPABASE_*, REDIS_URL (Upstash), LLM API keys, SECRET_KEY, FERNET_KEY, TRACKING_SECRET
+# заполнить SUPABASE_*, OPENROUTER_API_KEY или LLM API keys, SECRET_KEY, FERNET_KEY, TRACKING_SECRET
 
 # миграции
 supabase db push
 
 # dev (3 терминала или make parallel)
 make dev-api         # uvicorn app.main:app --reload
-make dev-worker      # python -m arq app.workers.main.WorkerSettings
+make dev-worker      # python -m procrastinate --app app.workers.main.app worker
 make dev-web         # cd frontend && npm run dev
 ```
 

@@ -8,7 +8,12 @@ from app.core.database import Base, get_db
 TEST_DB = "sqlite+aiosqlite:///:memory:"
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(autouse=True)
+def disable_external_email(monkeypatch):
+    monkeypatch.setattr("app.core.config.settings.transactional_smtp_host", "")
+
+
+@pytest.fixture
 async def test_engine():
     engine = create_async_engine(TEST_DB, connect_args={"check_same_thread": False})
     async with engine.begin() as conn:

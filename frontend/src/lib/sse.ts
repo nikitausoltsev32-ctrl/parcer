@@ -1,9 +1,13 @@
-// Minimal SSE helper for chat streaming. Full implementation in Phase 3.
+// SSE helper for chat streaming.
 
 export type SSEHandler = (event: { data: string; event?: string }) => void;
 
 export async function streamSSE(url: string, init: RequestInit, onEvent: SSEHandler): Promise<void> {
   const res = await fetch(url, init);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`SSE request failed: ${res.status}${body ? ` ${body}` : ""}`);
+  }
   if (!res.body) throw new Error("No SSE body");
   const reader = res.body.getReader();
   const decoder = new TextDecoder();

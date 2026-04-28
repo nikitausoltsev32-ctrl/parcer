@@ -39,7 +39,7 @@ class LLMClient:
     ) -> LLMResult:
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(base_url=self.base_url, api_key=self.api_key, timeout=timeout)
+        client = AsyncOpenAI(base_url=self.base_url, api_key=self.api_key, timeout=timeout, max_retries=0)
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": [self._to_openai(m) for m in messages],

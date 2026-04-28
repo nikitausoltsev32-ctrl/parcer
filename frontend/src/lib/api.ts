@@ -17,6 +17,10 @@ let refreshPromise: Promise<string> | null = null;
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
+    const url: string = err.config?.url ?? "";
+    if (url.includes("/auth/refresh")) {
+      return Promise.reject(err);
+    }
     if (err.response?.status === 401 && !err.config._retry) {
       err.config._retry = true;
       try {
@@ -30,7 +34,7 @@ api.interceptors.response.use(
         return api.request(err.config);
       } catch {
         clearToken();
-        window.location.href = "/login";
+        window.location.href = "/app";
       }
     }
     return Promise.reject(err);

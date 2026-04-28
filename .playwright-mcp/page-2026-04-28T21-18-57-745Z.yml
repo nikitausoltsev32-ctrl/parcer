@@ -1,0 +1,34 @@
+- generic [ref=e4]:
+  - banner [ref=e5]:
+    - generic [ref=e6]:
+      - img [ref=e7]
+      - generic [ref=e12]: Лида AI
+    - generic [ref=e13]:
+      - button "Войти" [ref=e14] [cursor=pointer]
+      - button "Зарегистрироваться" [active] [ref=e15] [cursor=pointer]
+  - generic [ref=e16]:
+    - generic [ref=e17]:
+      - heading "ИИ-агент по продажам для вашего бизнеса" [level=1] [ref=e18]
+      - paragraph [ref=e19]: Лида находит клиентов, читает сайты, пишет письма и ведёт CRM — через чат.
+    - generic [ref=e20]:
+      - generic [ref=e21]:
+        - generic [ref=e23]: Найди дизайн-студии в Казани
+        - generic [ref=e24]:
+          - generic [ref=e25]: Л
+          - generic [ref=e26]: ⟳Ищу дизайн-студии в Казани через публичные источники...
+        - generic [ref=e27]:
+          - generic [ref=e28]: Л
+          - generic [ref=e29]: Нашла 18 студий. Вот топ-5 с сайтами и контактами. Сохранить список?
+      - generic [ref=e30]:
+        - textbox "Напишите Лиде..." [ref=e31]
+        - button [ref=e33] [cursor=pointer]:
+          - img [ref=e34]
+      - paragraph [ref=e36]: Бесплатный старт · Без кредитной карты
+  - generic [ref=e38]:
+    - img [ref=e45]
+    - generic [ref=e48]:
+      - generic [ref=e49]: Находит компании
+      - generic [ref=e50]: Скажите Лиде каких клиентов вы ищете — она найдёт их в публичных источниках по всей России.
+    - generic [ref=e51]:
+      - button "Далее" [ref=e53] [cursor=pointer]
+      - generic [ref=e54]: Уже есть аккаунт? Войти

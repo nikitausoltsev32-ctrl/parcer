@@ -36,8 +36,6 @@ SUPABASE_ANON_KEY=<anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
 SUPABASE_STORAGE_BUCKET=parcer-dev
 
-REDIS_URL=rediss://default:<password>@<host>.upstash.io:6379
-
 SECRET_KEY=<random-32-plus-chars>
 FERNET_KEY=<fernet-key>
 TRACKING_SECRET=<random-32-plus-chars>
@@ -49,13 +47,13 @@ TRANSACTIONAL_SMTP_PASS=
 TRANSACTIONAL_FROM_EMAIL=noreply@example.local
 ```
 
-Почему `TRANSACTIONAL_SMTP_HOST=` пустой: тогда письма подтверждения печатаются в консоль backend, и можно вручную открыть ссылку. Если оставить `smtp.unisender.com` без логина/пароля, регистрация упадет на отправке письма.
+Почему `TRANSACTIONAL_SMTP_HOST=` пустой: тогда письма подтверждения печатаются в консоль backend, и можно вручную открыть ссылку. Если оставить реальный SMTP host без логина/пароля, регистрация формально пройдет, но письмо не уйдет и ошибка будет напечатана в консоль.
 
 ## Что нужно подготовить во внешних сервисах
 
 - Supabase project.
 - Примененные SQL migrations из `supabase/migrations/`.
-- Upstash Redis или другой доступный Redis по `REDIS_URL`.
+- OpenRouter key для ручной проверки AI-чата.
 
 Команды Supabase:
 
@@ -93,6 +91,6 @@ cmd /c npm run dev -- --host 127.0.0.1
 
 ## Что пока честно не готово как полноценный продуктовый E2E
 
-- Без Supabase и Redis регистрация/логин вручную не заработают.
+- Без Supabase регистрация/логин вручную не заработают.
 - AI/search/SMTP/inbox требуют ключи внешних провайдеров.
 - Ссылка "Забыли пароль?" есть в UI, но отдельный frontend route/page для reset flow еще нужно довести.
