@@ -1,37 +1,41 @@
 import { useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../lib/api";
 
 const SAGE = "oklch(0.52 0.10 165)";
 const BORDER = "rgba(0,0,0,0.08)";
 
-interface Company {
-  id: number;
-  name: string;
-  website: string;
-  city: string;
-  industry: string;
-  source: string;
+interface Contact {
+  id: string;
+  full_name: string | null;
+  company_name: string | null;
   email: string | null;
   phone: string | null;
-  summary: string;
-  confidence: "verified" | "inferred" | "missing" | "failed";
+  source: string | null;
+  website: string | null;
+  city: string | null;
+  industry: string | null;
+  enrichment_status: string | null;
+  enrichment_summary: string | null;
 }
 
-const COMPANIES: Company[] = [
-  { id: 1, name: "Студия Форма", website: "forma-kazan.ru", city: "Казань", industry: "Дизайн-студия", source: "SerpAPI", email: "hello@forma-kazan.ru", phone: "+7 843 200-11-22", summary: "Занимается брендингом и веб-дизайном, команда 12 человек, активный сайт.", confidence: "verified" },
-  { id: 2, name: "Бюро Арт", website: "buroart.ru", city: "Казань", industry: "Дизайн-студия", source: "2ГИС", email: null, phone: "+7 843 511-34-56", summary: "Небольшое дизайн-бюро, специализируется на полиграфии и айдентике.", confidence: "inferred" },
-  { id: 3, name: "Pixel Lab", website: "pixellab.kzn.ru", city: "Казань", industry: "Digital-агентство", source: "SerpAPI", email: "info@pixellab.kzn.ru", phone: null, summary: "Digital-агентство, много кейсов в портфолио, работают с локальными брендами.", confidence: "verified" },
-  { id: 4, name: "Линия Дизайна", website: "linia-design.ru", city: "Казань", industry: "Дизайн-студия", source: "Firecrawl", email: "contact@linia-design.ru", phone: "+7 917 234-56-78", summary: "UX/UI студия, фокус на мобильных приложениях, есть HR-страница.", confidence: "verified" },
-  { id: 5, name: "МаркетАрт", website: "marketart.kzn.ru", city: "Казань", industry: "Маркетинговое агентство", source: "2ГИС", email: null, phone: null, summary: "Сайт не открылся при обходе. Номер телефона взят из 2ГИС.", confidence: "failed" },
-  { id: 6, name: "Craft Bureau", website: "craftbureau.ru", city: "Казань", industry: "Дизайн-студия", source: "SerpAPI", email: "hey@craftbureau.ru", phone: "+7 843 900-00-10", summary: "Современная студия, активный Instagram, специализируются на упаковке.", confidence: "verified" },
-  { id: 7, name: "Идея Групп", website: "ideagroup.ru", city: "Казань", industry: "Digital-агентство", source: "Firecrawl", email: "info@ideagroup.ru", phone: "+7 843 233-44-55", summary: "Комплексное digital-агентство, контекстная реклама + дизайн.", confidence: "inferred" },
-  { id: 8, name: "Студия Контент", website: "studiocontent.ru", city: "Казань", industry: "Контент-студия", source: "manual", email: "hi@studiocontent.ru", phone: null, summary: "Производство видео и фото-контента для брендов.", confidence: "verified" },
-];
+interface Company {
+  name: string;
+  website: string | null;
+  city: string | null;
+  industry: string | null;
+  source: string | null;
+  email: string | null;
+  phone: string | null;
+  summary: string | null;
+  confidence: string;
+}
 
 const SOURCE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  "2ГИС":      { bg: "#EEF6FF", text: "#1D6FA4", border: "#BDD8F0" },
-  "SerpAPI":   { bg: "#F0FFF4", text: "#276749", border: "#9AE6B4" },
-  "Firecrawl": { bg: "#FFF8F0", text: "#9B4D0F", border: "#FBD38D" },
-  "CSV":       { bg: "#FAF5FF", text: "#6B46C1", border: "#D6BCFA" },
+  "2gis":      { bg: "#EEF6FF", text: "#1D6FA4", border: "#BDD8F0" },
+  "serpapi":   { bg: "#F0FFF4", text: "#276749", border: "#9AE6B4" },
+  "firecrawl": { bg: "#FFF8F0", text: "#9B4D0F", border: "#FBD38D" },
+  "csv":       { bg: "#FAF5FF", text: "#6B46C1", border: "#D6BCFA" },
   "manual":    { bg: "#F7FAFC", text: "#4A5568", border: "#CBD5E0" },
 };
 
@@ -42,11 +46,12 @@ const CONFIDENCE_MAP: Record<string, { label: string; color: string; bg: string;
   failed:   { label: "Ошибка",        color: "#C53030", bg: "#FFF5F5", border: "#FEB2B2" },
 };
 
-function SourceBadge({ source }: { source: string }) {
-  const c = SOURCE_COLORS[source] ?? SOURCE_COLORS["manual"];
+function SourceBadge({ source }: { source: string | null }) {
+  const key = (source ?? "manual").toLowerCase();
+  const c = SOURCE_COLORS[key] ?? SOURCE_COLORS["manual"];
   return (
     <span style={{ display: "inline-flex", alignItems: "center", padding: "1px 7px", borderRadius: "4px", fontSize: "11px", fontWeight: 500, background: c.bg, color: c.text, border: `1px solid ${c.border}`, letterSpacing: "0.01em" }}>
-      {source}
+      {source ?? "manual"}
     </span>
   );
 }
@@ -70,8 +75,10 @@ function HoverCard({ company }: { company: Company }) {
       pointerEvents: "none",
     }}>
       <div style={{ fontWeight: 600, fontSize: "13.5px", color: "#111", marginBottom: "4px" }}>{company.name}</div>
-      <div style={{ fontSize: "12px", color: "#999", marginBottom: "10px" }}>{company.city} · {company.industry}</div>
-      <div style={{ fontSize: "12px", color: "#666", lineHeight: "1.5", marginBottom: "10px" }}>{company.summary}</div>
+      <div style={{ fontSize: "12px", color: "#999", marginBottom: "10px" }}>{[company.city, company.industry].filter(Boolean).join(" · ")}</div>
+      {company.summary && (
+        <div style={{ fontSize: "12px", color: "#666", lineHeight: "1.5", marginBottom: "10px" }}>{company.summary}</div>
+      )}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "10px" }}>
         <SourceBadge source={company.source} />
         <ConfidenceBadge state={company.confidence} />
@@ -92,21 +99,50 @@ function HoverCard({ company }: { company: Company }) {
   );
 }
 
+function contactsToCompanies(contacts: Contact[]): Company[] {
+  const map = new Map<string, Company>();
+  for (const c of contacts) {
+    const name = c.company_name?.trim();
+    if (!name) continue;
+    if (!map.has(name)) {
+      map.set(name, {
+        name,
+        website: c.website ?? null,
+        city: c.city ?? null,
+        industry: c.industry ?? null,
+        source: c.source ?? null,
+        email: c.email ?? null,
+        phone: c.phone ?? null,
+        summary: c.enrichment_summary ?? null,
+        confidence: c.enrichment_status === "done" ? "verified" : c.enrichment_status === "failed" ? "failed" : c.email ? "inferred" : "missing",
+      });
+    }
+  }
+  return Array.from(map.values());
+}
+
 export default function CompaniesPage() {
   const [search, setSearch] = useState("");
-  const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [hoveredName, setHoveredName] = useState<string | null>(null);
   const [hoverPos, setHoverPos] = useState({ x: 0, y: 0 });
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedName, setSelectedName] = useState<string | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
-  const filtered = search
-    ? COMPANIES.filter((c) =>
-        c.name.toLowerCase().includes(search.toLowerCase()) ||
-        c.industry.toLowerCase().includes(search.toLowerCase())
-      )
-    : COMPANIES;
+  const { data: contacts = [], isLoading } = useQuery<Contact[]>({
+    queryKey: ["contacts"],
+    queryFn: () => api.get("/contacts?limit=100").then((r) => r.data),
+  });
 
-  const hoveredCompany = COMPANIES.find((c) => c.id === hoveredId);
+  const companies = contactsToCompanies(contacts);
+
+  const filtered = search
+    ? companies.filter((c) =>
+        c.name.toLowerCase().includes(search.toLowerCase()) ||
+        (c.industry ?? "").toLowerCase().includes(search.toLowerCase())
+      )
+    : companies;
+
+  const hoveredCompany = companies.find((c) => c.name === hoveredName);
 
   const cell: React.CSSProperties = {
     padding: "10px 14px", fontSize: "13px", color: "#333",
@@ -123,7 +159,6 @@ export default function CompaniesPage() {
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
-      {/* Header */}
       <div style={{
         height: "52px", display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 24px", borderBottom: `1px solid ${BORDER}`,
@@ -131,7 +166,7 @@ export default function CompaniesPage() {
       }}>
         <div>
           <span style={{ fontSize: "14px", fontWeight: 600, color: "#111" }}>Компании</span>
-          <span style={{ fontSize: "13px", color: "#AAA", marginLeft: "8px" }}>{COMPANIES.length} записей</span>
+          <span style={{ fontSize: "13px", color: "#AAA", marginLeft: "8px" }}>{companies.length} записей</span>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
           <div style={{
@@ -158,61 +193,67 @@ export default function CompaniesPage() {
         </div>
       </div>
 
-      {/* Table */}
       <div style={{ flex: 1, overflow: "auto", padding: "20px 24px" }}>
-        <div
-          ref={tableRef}
-          onMouseMove={(e) => {
-            setHoverPos({ x: e.clientX, y: e.clientY });
-          }}
-          style={{ position: "relative", borderRadius: "8px", border: `1px solid ${BORDER}`, overflow: "hidden", background: "#FFF" }}
-        >
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                {["Компания", "Сайт", "Город", "Отрасль", "Email", "Источник", "Статус"].map((col) => (
-                  <th key={col} style={headCell}>{col}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c) => (
-                <tr
-                  key={c.id}
-                  onMouseEnter={() => setHoveredId(c.id)}
-                  onMouseLeave={() => setHoveredId(null)}
-                  onClick={() => setSelectedId(c.id === selectedId ? null : c.id)}
-                  style={{
-                    cursor: "pointer",
-                    background: selectedId === c.id ? `color-mix(in oklch, ${SAGE} 6%, transparent)` :
-                      hoveredId === c.id ? "rgba(0,0,0,0.02)" : "transparent",
-                    transition: "background 0.1s",
-                  }}
-                >
-                  <td style={{ ...cell, fontWeight: 500, color: "#111" }}>{c.name}</td>
-                  <td style={cell}><span style={{ color: SAGE }}>{c.website}</span></td>
-                  <td style={cell}>{c.city}</td>
-                  <td style={cell}>{c.industry}</td>
-                  <td style={cell}>{c.email ? <span style={{ color: SAGE }}>{c.email}</span> : <span style={{ color: "#CCC" }}>—</span>}</td>
-                  <td style={cell}><SourceBadge source={c.source} /></td>
-                  <td style={cell}><ConfidenceBadge state={c.confidence} /></td>
+        {isLoading ? (
+          <div style={{ color: "#AAA", fontSize: "13px", padding: "32px 0", textAlign: "center" }}>Загрузка…</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: "64px", gap: "10px" }}>
+            <div style={{ fontSize: "14.5px", fontWeight: 500, color: "#333" }}>Нет компаний</div>
+            <div style={{ fontSize: "13px", color: "#999" }}>Добавьте контакты с названием компании через чат с Лидой</div>
+          </div>
+        ) : (
+          <div
+            ref={tableRef}
+            onMouseMove={(e) => { setHoverPos({ x: e.clientX, y: e.clientY }); }}
+            style={{ position: "relative", borderRadius: "8px", border: `1px solid ${BORDER}`, overflow: "hidden", background: "#FFF" }}
+          >
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  {["Компания", "Сайт", "Город", "Отрасль", "Email", "Источник", "Статус"].map((col) => (
+                    <th key={col} style={headCell}>{col}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map((c) => (
+                  <tr
+                    key={c.name}
+                    onMouseEnter={() => setHoveredName(c.name)}
+                    onMouseLeave={() => setHoveredName(null)}
+                    onClick={() => setSelectedName(c.name === selectedName ? null : c.name)}
+                    style={{
+                      cursor: "pointer",
+                      background: selectedName === c.name ? `color-mix(in oklch, ${SAGE} 6%, transparent)` :
+                        hoveredName === c.name ? "rgba(0,0,0,0.02)" : "transparent",
+                      transition: "background 0.1s",
+                    }}
+                  >
+                    <td style={{ ...cell, fontWeight: 500, color: "#111" }}>{c.name}</td>
+                    <td style={cell}>{c.website ? <span style={{ color: SAGE }}>{c.website}</span> : <span style={{ color: "#CCC" }}>—</span>}</td>
+                    <td style={cell}>{c.city ?? <span style={{ color: "#CCC" }}>—</span>}</td>
+                    <td style={cell}>{c.industry ?? <span style={{ color: "#CCC" }}>—</span>}</td>
+                    <td style={cell}>{c.email ? <span style={{ color: SAGE }}>{c.email}</span> : <span style={{ color: "#CCC" }}>—</span>}</td>
+                    <td style={cell}><SourceBadge source={c.source} /></td>
+                    <td style={cell}><ConfidenceBadge state={c.confidence} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
-          {hoveredId && hoveredCompany && (
-            <div style={{
-              position: "fixed",
-              left: Math.min(hoverPos.x + 16, window.innerWidth - 280),
-              top: hoverPos.y + 16 + 220 > window.innerHeight ? hoverPos.y - 220 : hoverPos.y + 16,
-              zIndex: 1000,
-              pointerEvents: "none",
-            }}>
-              <HoverCard company={hoveredCompany} />
-            </div>
-          )}
-        </div>
+            {hoveredName && hoveredCompany && (
+              <div style={{
+                position: "fixed",
+                left: Math.min(hoverPos.x + 16, window.innerWidth - 280),
+                top: hoverPos.y + 16 + 220 > window.innerHeight ? hoverPos.y - 220 : hoverPos.y + 16,
+                zIndex: 1000,
+                pointerEvents: "none",
+              }}>
+                <HoverCard company={hoveredCompany} />
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
-"""Enrichment service: Firecrawl → LLM → contact.enrichment."""
+"""Enrichment service: Hunter.io (email) + Firecrawl (website) → LLM → contact.enrichment."""
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import UTC, datetime
@@ -99,7 +100,17 @@ async def enrich_contact(contact_id: str, db: AsyncSession) -> dict:
     if not website:
         return {"enriched": False, "reason": "no_website"}
 
-    scraped: str | None = await _scrape_website(website)
+    from app.services.search.hunter import find_emails_by_domain
+
+    scraped, hunter_emails = await asyncio.gather(
+        _scrape_website(website),
+        find_emails_by_domain(website),
+    )
+
+    # Сохраняем лучший email из Hunter если у контакта ещё нет
+    if hunter_emails and not contact.email:
+        contact.email = hunter_emails[0]["email"]
+        logger.info("enrich_contact: set email from hunter: %s", contact.email)
 
     parts: list[str] = []
     if company:
@@ -128,7 +139,14 @@ async def enrich_contact(contact_id: str, db: AsyncSession) -> dict:
         return {"enriched": False, "reason": "llm_error"}
 
     enrichment["enriched_at"] = datetime.now(UTC).isoformat()
-    enrichment["source"] = "firecrawl+llm" if scraped else "llm"
+    sources = []
+    if scraped:
+        sources.append("firecrawl")
+    if hunter_emails:
+        sources.append("hunter")
+        enrichment["hunter_emails"] = hunter_emails[:3]
+    sources.append("llm")
+    enrichment["source"] = "+".join(sources)
 
     existing = contact.enrichment or {}
     existing.update(enrichment)

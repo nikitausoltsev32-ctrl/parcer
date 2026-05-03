@@ -91,11 +91,210 @@ TOOLS_SCHEMA: list[dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_campaign",
+            "description": (
+                "Создать кампанию рассылки и поставить в очередь генерацию писем. "
+                "Используй когда пользователь хочет запустить рассылку по списку контактов. "
+                "Перед вызовом убедись что у пользователя есть список контактов (list_id), "
+                "шаблон (template_id) и почтовый ящик (smtp_account_id)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Название кампании"},
+                    "list_id": {"type": "string", "description": "ID списка контактов"},
+                    "template_id": {"type": "string", "description": "ID шаблона письма"},
+                    "smtp_account_id": {"type": "string", "description": "ID почтового ящика для отправки"},
+                    "send_rate_per_hour": {"type": "integer", "default": 30, "description": "Писем в час"},
+                },
+                "required": ["name", "list_id", "template_id", "smtp_account_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_campaign",
+            "description": (
+                "Отправить сгенерированные письма кампании. "
+                "Используй только после того как кампания в статусе 'generated'. "
+                "Спроси подтверждение у пользователя перед вызовом."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "campaign_id": {"type": "string", "description": "ID кампании для отправки"},
+                },
+                "required": ["campaign_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_resources",
+            "description": (
+                "Получить списки доступных ресурсов пользователя: списки контактов, шаблоны, почтовые ящики. "
+                "Вызывай когда нужно узнать какие list_id / template_id / smtp_account_id доступны."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "resource": {
+                        "type": "string",
+                        "enum": ["contact_lists", "templates", "smtp_accounts", "campaigns"],
+                        "description": "Тип ресурса",
+                    },
+                },
+                "required": ["resource"],
+            },
+        },
+    },
 ]
 
 
 async def _not_implemented(args: dict[str, Any]) -> dict[str, Any]:
     return {"error": "not_implemented"}
+
+
+async def _handle_create_campaign(args: dict[str, Any]) -> dict[str, Any]:
+    from app.models.campaign import Campaign
+    from app.models.smtp_account import SmtpAccount
+    from app.models.template import Template
+    from app.workers.main import generate_letters
+
+    db: AsyncSession = args.pop("__db")
+    user: User = args.pop("__user")
+
+    try:
+        list_id = uuid.UUID(args["list_id"])
+        template_id = uuid.UUID(args["template_id"])
+        smtp_account_id = uuid.UUID(args["smtp_account_id"])
+    except (ValueError, KeyError) as e:
+        field = str(e).strip("'\"")
+        return {"error": "invalid_uuid", "field": field, "message": "Сначала вызови list_resources, чтобы получить настоящие UUID."}
+
+    if not (await db.execute(select(ContactList.id).where(ContactList.id == list_id, ContactList.user_id == user.id))).scalar_one_or_none():
+        return {"error": "not_found", "message": "Список контактов не найден. Вызови list_resources(resource='contact_lists')."}
+    if not (await db.execute(select(SmtpAccount.id).where(SmtpAccount.id == smtp_account_id, SmtpAccount.user_id == user.id))).scalar_one_or_none():
+        return {"error": "not_found", "message": "Почтовый ящик не найден. Вызови list_resources(resource='smtp_accounts')."}
+    if not (await db.execute(select(Template.id).where(Template.id == template_id, (Template.user_id == user.id) | (Template.user_id.is_(None))))).scalar_one_or_none():
+        return {"error": "not_found", "message": "Шаблон не найден. Вызови list_resources(resource='templates')."}
+
+    campaign = Campaign(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        name=args.get("name", ""),
+        list_id=list_id,
+        template_id=template_id,
+        smtp_account_id=smtp_account_id,
+        send_rate_per_hour=args.get("send_rate_per_hour", 30),
+        status="generating",
+    )
+    db.add(campaign)
+    await db.commit()
+    await db.refresh(campaign)
+
+    await generate_letters.defer_async(campaign_id=str(campaign.id))
+
+    return {
+        "campaign_id": str(campaign.id),
+        "name": campaign.name,
+        "status": "generating",
+        "message": f"Кампания «{campaign.name}» создана, генерация писем запущена.",
+    }
+
+
+async def _handle_send_campaign(args: dict[str, Any]) -> dict[str, Any]:
+    from datetime import timedelta
+
+    from app.models.campaign import Campaign, CampaignMessage
+    from app.workers.main import send_email
+
+    db: AsyncSession = args.pop("__db")
+    user: User = args.pop("__user")
+
+    try:
+        campaign_id = uuid.UUID(args["campaign_id"])
+    except (ValueError, KeyError):
+        return {"error": "invalid_uuid", "field": "campaign_id", "message": "Сначала вызови list_resources(resource='campaigns')."}
+
+    row = await db.execute(
+        select(Campaign).where(Campaign.id == campaign_id, Campaign.user_id == user.id)
+    )
+    campaign = row.scalar_one_or_none()
+    if not campaign:
+        return {"error": "not_found", "message": "Кампания не найдена."}
+    if campaign.status != "generated":
+        return {
+            "error": "wrong_status",
+            "message": f"Кампания в статусе «{campaign.status}», отправка возможна только из статуса «generated».",
+        }
+
+    rows = await db.execute(
+        select(CampaignMessage).where(
+            CampaignMessage.campaign_id == campaign_id,
+            CampaignMessage.status == "pending",
+        )
+    )
+    messages = rows.scalars().all()
+    rate = max(campaign.send_rate_per_hour, 1)
+    for i, msg in enumerate(messages):
+        await send_email.defer_async(
+            message_id=str(msg.id),
+            schedule_in={"seconds": int(3600 / rate) * i},
+        )
+
+    campaign.status = "sending"
+    await db.commit()
+
+    return {
+        "campaign_id": str(campaign_id),
+        "enqueued": len(messages),
+        "message": f"Отправка запущена: {len(messages)} писем поставлено в очередь.",
+    }
+
+
+async def _handle_list_resources(args: dict[str, Any]) -> dict[str, Any]:
+    from app.models.campaign import Campaign
+    from app.models.smtp_account import SmtpAccount
+    from app.models.template import Template
+
+    db: AsyncSession = args.pop("__db")
+    user: User = args.pop("__user")
+    resource = args.get("resource", "contact_lists")
+
+    if resource == "contact_lists":
+        rows = await db.execute(
+            select(ContactList).where(ContactList.user_id == user.id)
+        )
+        items = [{"id": str(r.id), "name": r.name, "total": r.total_count} for r in rows.scalars().all()]
+
+    elif resource == "templates":
+        rows = await db.execute(
+            select(Template).where((Template.user_id == user.id) | (Template.user_id.is_(None)))
+        )
+        items = [{"id": str(r.id), "name": r.name, "tone": r.tone} for r in rows.scalars().all()]
+
+    elif resource == "smtp_accounts":
+        rows = await db.execute(
+            select(SmtpAccount).where(SmtpAccount.user_id == user.id)
+        )
+        items = [{"id": str(r.id), "email": r.from_email, "name": r.from_name, "active": r.is_active} for r in rows.scalars().all()]
+
+    elif resource == "campaigns":
+        rows = await db.execute(
+            select(Campaign).where(Campaign.user_id == user.id).order_by(Campaign.created_at.desc()).limit(10)
+        )
+        items = [{"id": str(r.id), "name": r.name, "status": r.status, "stats": r.stats} for r in rows.scalars().all()]
+
+    else:
+        return {"error": "unknown_resource"}
+
+    return {"resource": resource, "items": items, "count": len(items)}
 
 
 async def _handle_search_companies(args: dict[str, Any]) -> dict[str, Any]:
@@ -161,8 +360,12 @@ async def _handle_enrich_contacts(args: dict[str, Any]) -> dict[str, Any]:
     if contact_ids:
         ids = contact_ids
     elif list_id:
+        try:
+            parsed_list_id = uuid.UUID(list_id)
+        except ValueError:
+            return {"error": "invalid_uuid", "field": "list_id", "message": "Сначала вызови list_resources(resource='contact_lists')."}
         rows = await db.execute(
-            select(Contact.id).where(Contact.list_id == uuid.UUID(list_id))
+            select(Contact.id).where(Contact.list_id == parsed_list_id)
         )
         ids = [str(r) for r in rows.scalars().all()]
     else:
@@ -178,9 +381,9 @@ HANDLERS: dict[str, ToolHandler] = {
     "search_companies": _handle_search_companies,
     "save_companies": _handle_save_companies,
     "enrich_contacts": _handle_enrich_contacts,
-    "create_campaign": _not_implemented,
-    "generate_letters": _not_implemented,
-    "send_campaign": _not_implemented,
+    "create_campaign": _handle_create_campaign,
+    "send_campaign": _handle_send_campaign,
+    "list_resources": _handle_list_resources,
     "check_inbox": _not_implemented,
     "update_contact": _not_implemented,
     "set_reminder": _not_implemented,

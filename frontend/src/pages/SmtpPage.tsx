@@ -1,42 +1,109 @@
 import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "../lib/api";
 
 const SAGE = "oklch(0.52 0.10 165)";
 const BORDER = "rgba(0,0,0,0.08)";
 
-const PROVIDERS = [
-  {
-    id: "yandex",
+type ProviderId = "yandex" | "mailru" | "gmail" | "outlook" | "custom";
+
+interface ProviderInfo {
+  name: string;
+  hint: string;
+  domains: string[];
+  host: string | null;
+  port: number | null;
+  accent: string;
+  icon: string;
+  auth: "oauth" | "password";
+}
+
+const PROVIDER_INFO: Record<ProviderId, ProviderInfo> = {
+  yandex: {
     name: "Яндекс Почта",
-    hint: "Используйте пароль приложения из настроек Яндекс ID",
-    icon: (
-      <div style={{ width: "28px", height: "28px", borderRadius: "7px", background: "#FC3F1D", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: "14px", fontFamily: "Arial" }}>Я</div>
-    ),
+    hint: "Нужен только пароль приложения из Яндекс ID",
+    domains: ["yandex.ru", "ya.ru", "yandex.com"],
+    host: "smtp.yandex.ru",
+    port: 465,
+    accent: "#FC3F1D",
+    icon: "Я",
+    auth: "password",
   },
-  {
-    id: "gmail",
+  mailru: {
+    name: "Mail.ru",
+    hint: "Нужен только пароль приложения Mail.ru",
+    domains: ["mail.ru", "bk.ru", "list.ru", "inbox.ru"],
+    host: "smtp.mail.ru",
+    port: 465,
+    accent: "#2563EB",
+    icon: "@",
+    auth: "password",
+  },
+  gmail: {
     name: "Gmail",
-    hint: "Включите двухфакторную аутентификацию и создайте пароль приложения в Google Account",
-    icon: (
-      <div style={{ width: "28px", height: "28px", borderRadius: "7px", background: "#EA4335", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: "13px", fontFamily: "Arial" }}>G</div>
-    ),
+    hint: "Подключение через Google OAuth без пароля приложения",
+    domains: ["gmail.com"],
+    host: null,
+    port: null,
+    accent: "#EA4335",
+    icon: "G",
+    auth: "oauth",
   },
-  {
-    id: "custom",
+  outlook: {
+    name: "Outlook",
+    hint: "Нужен пароль приложения Microsoft, SMTP настроим автоматически",
+    domains: ["outlook.com", "hotmail.com", "live.com"],
+    host: "smtp.office365.com",
+    port: 587,
+    accent: "#0078D4",
+    icon: "O",
+    auth: "password",
+  },
+  custom: {
     name: "Свой SMTP",
-    hint: "Введите данные вашего почтового провайдера вручную",
-    icon: (
-      <div style={{ width: "28px", height: "28px", borderRadius: "7px", background: "#6B7280", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-          <polyline points="22,6 12,13 2,6" />
-        </svg>
-      </div>
-    ),
+    hint: "Укажите SMTP-хост и порт вручную",
+    domains: [],
+    host: null,
+    port: null,
+    accent: "#6B7280",
+    icon: "S",
+    auth: "password",
   },
-];
+};
+
+const DETECTABLE_PROVIDERS: ProviderId[] = ["yandex", "mailru", "gmail", "outlook"];
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+function detectSmtp(email: string): { host: string | null; port: number | null; provider: ProviderId } | null {
+  const domain = email.trim().split("@")[1]?.toLowerCase();
+  if (!domain) return null;
+  const provider = DETECTABLE_PROVIDERS.find((id) => PROVIDER_INFO[id].domains.includes(domain));
+  if (provider) return { host: PROVIDER_INFO[provider].host, port: PROVIDER_INFO[provider].port, provider };
+  return null;
+}
+
+function defaultSenderName(email: string) {
+  return email.trim().split("@")[0] || email.trim();
+}
+
+function normalizeProvider(provider: string): ProviderId {
+  return Object.prototype.hasOwnProperty.call(PROVIDER_INFO, provider) ? (provider as ProviderId) : "custom";
+}
+
+function ProviderIcon({ provider, size = 28 }: { provider: ProviderId; size?: number }) {
+  const meta = PROVIDER_INFO[provider];
+  return (
+    <div style={{ width: `${size}px`, height: `${size}px`, borderRadius: "7px", background: meta.accent, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: `${Math.max(12, size / 2)}px`, fontFamily: "Arial", flexShrink: 0 }}>
+      {meta.icon}
+    </div>
+  );
+}
 
 interface SmtpAccount {
-  id: number;
+  id: string;
   provider: string;
   from_email: string;
   from_name: string;
@@ -44,13 +111,149 @@ interface SmtpAccount {
   is_active: boolean;
 }
 
+interface FormState {
+  from_email: string;
+  password: string;
+  from_name: string;
+  host: string;
+  port: string;
+  username: string;
+}
+
+const EMPTY_FORM: FormState = { from_email: "", password: "", from_name: "", host: "", port: "", username: "" };
+
 export default function SmtpPage() {
-  const [accounts] = useState<SmtpAccount[]>([
-    { id: 1, provider: "gmail", from_email: "alexey@gmail.com", from_name: "Алексей Иванов", daily_limit: 30, is_active: true },
-  ]);
+  const qc = useQueryClient();
   const [showSetup, setShowSetup] = useState(false);
   const [step, setStep] = useState(1);
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<ProviderId | null>(null);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [gmailConnecting, setGmailConnecting] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [detectedHost, setDetectedHost] = useState<string | null>(null);
+  const [detectedPort, setDetectedPort] = useState<number | null>(null);
+
+  // Handle OAuth redirect back
+  const searchParams = new URLSearchParams(window.location.search);
+  const gmailConnected = searchParams.get("gmail_connected");
+  const gmailError = searchParams.get("gmail_error");
+  if (gmailConnected || gmailError) {
+    window.history.replaceState({}, "", window.location.pathname + "?tab=smtp");
+    if (gmailConnected) qc.invalidateQueries({ queryKey: ["smtp-accounts"] });
+  }
+
+  const { data: accounts = [] } = useQuery<SmtpAccount[]>({
+    queryKey: ["smtp-accounts"],
+    queryFn: () => api.get("/smtp-accounts").then((r) => r.data),
+  });
+
+  const createMut = useMutation({
+    mutationFn: (body: object) => api.post("/smtp-accounts", body).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["smtp-accounts"] });
+      setShowSetup(false);
+      setForm(EMPTY_FORM);
+      setStep(1);
+      setSelectedProvider(null);
+      setShowAdvanced(false);
+      setDetectedHost(null);
+      setDetectedPort(null);
+    },
+  });
+
+  const verifyMut = useMutation({
+    mutationFn: (id: string) => api.post(`/smtp-accounts/${id}/verify`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["smtp-accounts"] }),
+    onSettled: () => setVerifyingId(null),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => api.delete(`/smtp-accounts/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["smtp-accounts"] }),
+  });
+
+  async function handleGmailOAuth() {
+    setGmailConnecting(true);
+    try {
+      const { data } = await api.get("/smtp-accounts/gmail/oauth/start");
+      window.location.href = data.auth_url;
+    } catch {
+      setGmailConnecting(false);
+    }
+  }
+
+  function resetSetupState() {
+    setStep(1);
+    setSelectedProvider(null);
+    setForm(EMPTY_FORM);
+    setShowAdvanced(false);
+    setDetectedHost(null);
+    setDetectedPort(null);
+  }
+
+  function syncEmailDetection(email: string) {
+    const detected = detectSmtp(email);
+    if (detected) {
+      setSelectedProvider(detected.provider);
+      setDetectedHost(detected.host);
+      setDetectedPort(detected.port);
+    } else if (isValidEmail(email)) {
+      setSelectedProvider("custom");
+      setDetectedHost(null);
+      setDetectedPort(null);
+    } else {
+      setSelectedProvider(null);
+      setDetectedHost(null);
+      setDetectedPort(null);
+    }
+  }
+
+  function handleEmailChange(email: string) {
+    setForm((f) => ({ ...f, from_email: email }));
+    syncEmailDetection(email);
+  }
+
+  function continueFromEmail() {
+    if (!isValidEmail(form.from_email)) return;
+    syncEmailDetection(form.from_email);
+    setStep(2);
+  }
+
+  function handleConnect() {
+    const provider = selectedProvider ?? "custom";
+    const providerDefaults = PROVIDER_INFO[provider];
+    const fromEmail = form.from_email.trim();
+    const isCustomProvider = provider === "custom";
+    const host = isCustomProvider ? form.host.trim() : (detectedHost ?? providerDefaults.host ?? "");
+    const portValue = isCustomProvider ? form.port : String(detectedPort ?? providerDefaults.port ?? "");
+    const port = parseInt(portValue, 10);
+    if (!host || !Number.isFinite(port)) return;
+    const body: Record<string, unknown> = {
+      provider,
+      from_email: fromEmail,
+      from_name: form.from_name.trim() || defaultSenderName(fromEmail),
+      username: form.username.trim() || fromEmail,
+      password: form.password.trim(),
+      daily_limit: 30,
+      host,
+      port,
+    };
+    createMut.mutate(body);
+  }
+
+  const emailReady = isValidEmail(form.from_email);
+  const currentProvider = selectedProvider ?? (emailReady ? "custom" : null);
+  const providerMeta = currentProvider ? PROVIDER_INFO[currentProvider] : null;
+  const isCustom = currentProvider === "custom";
+  const isOauth = currentProvider !== null && PROVIDER_INFO[currentProvider].auth === "oauth";
+  const isAutoDetected = currentProvider !== null && currentProvider !== "custom" && currentProvider !== "gmail";
+  const customPort = parseInt(form.port, 10);
+  const canConnect = Boolean(
+    emailReady &&
+    form.password.trim() &&
+    (!isCustom || (form.host.trim() && Number.isFinite(customPort) && customPort > 0))
+  );
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
@@ -64,7 +267,7 @@ export default function SmtpPage() {
           <span style={{ fontSize: "13px", color: "#AAA", marginLeft: "8px" }}>{accounts.length} подключено</span>
         </div>
         <button
-          onClick={() => { setShowSetup(true); setStep(1); setSelectedProvider(null); }}
+          onClick={() => { resetSetupState(); setShowSetup(true); }}
           style={{
             padding: "7px 14px", borderRadius: "6px", background: SAGE,
             color: "#FFF", border: "none", fontSize: "13px", fontWeight: 500,
@@ -87,9 +290,9 @@ export default function SmtpPage() {
             </div>
             <div style={{ fontSize: "14.5px", fontWeight: 500, color: "#333" }}>Нет подключённых ящиков</div>
             <div style={{ fontSize: "13px", color: "#999", maxWidth: "300px", textAlign: "center", lineHeight: "1.5" }}>
-              Подключите Gmail или Яндекс, чтобы отправлять письма через Лиду
+              Подключите Gmail, Яндекс, Mail.ru или Outlook, чтобы отправлять письма через Лиду
             </div>
-            <button onClick={() => { setShowSetup(true); setStep(1); }} style={{ marginTop: "4px", padding: "8px 16px", borderRadius: "6px", background: SAGE, color: "#FFF", border: "none", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={() => { resetSetupState(); setShowSetup(true); }} style={{ marginTop: "4px", padding: "8px 16px", borderRadius: "6px", background: SAGE, color: "#FFF", border: "none", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
               Подключить
             </button>
           </div>
@@ -97,69 +300,84 @@ export default function SmtpPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxWidth: "600px" }}>
             {accounts.map((acc) => (
               <div key={acc.id} style={{ padding: "16px 18px", borderRadius: "10px", border: `1px solid ${BORDER}`, background: "#FFF", display: "flex", alignItems: "center", gap: "14px" }}>
-                <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: acc.provider === "gmail" ? "#EA4335" : "#FC3F1D", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: "14px", fontFamily: "Arial", flexShrink: 0 }}>
-                  {acc.provider === "gmail" ? "G" : "Я"}
-                </div>
+                <ProviderIcon provider={normalizeProvider(acc.provider)} size={36} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: "13.5px", color: "#111" }}>{acc.from_email}</div>
                   <div style={{ fontSize: "12px", color: "#999", marginTop: "2px" }}>{acc.from_name} · {acc.daily_limit} писем/день</div>
                 </div>
                 <span style={{ padding: "3px 9px", borderRadius: "5px", fontSize: "11.5px", fontWeight: 500, background: acc.is_active ? "#F0FFF4" : "#F7FAFC", color: acc.is_active ? "#276749" : "#718096", border: `1px solid ${acc.is_active ? "#9AE6B4" : "#CBD5E0"}` }}>
-                  {acc.is_active ? "Активен" : "Отключён"}
+                  {acc.is_active ? "Активен" : "Не проверен"}
                 </span>
+                <button
+                  onClick={() => { setVerifyingId(acc.id); verifyMut.mutate(acc.id); }}
+                  disabled={verifyingId === acc.id}
+                  style={{ padding: "5px 10px", borderRadius: "5px", border: `1px solid ${BORDER}`, background: "#FFF", fontSize: "12px", cursor: "pointer", fontFamily: "inherit", color: "#555" }}
+                >
+                  {verifyingId === acc.id ? "..." : "Проверить"}
+                </button>
+                <button
+                  onClick={() => deleteMut.mutate(acc.id)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#CCC", padding: "4px" }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4h6v2" />
+                  </svg>
+                </button>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Setup modal */}
       {showSetup && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", animation: "fadeIn 0.15s ease" }}>
-          <div style={{ background: "#FFF", borderRadius: "12px", width: "480px", maxWidth: "95vw", boxShadow: "0 16px 48px rgba(0,0,0,0.18)", overflow: "hidden", animation: "slideInRight 0.2s ease" }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#FFF", borderRadius: "12px", width: "480px", maxWidth: "95vw", boxShadow: "0 16px 48px rgba(0,0,0,0.18)", overflow: "hidden" }}>
             <div style={{ padding: "20px 24px 16px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <div style={{ fontWeight: 600, fontSize: "15px", color: "#111" }}>Подключить почту</div>
                 <div style={{ fontSize: "12px", color: "#AAA", marginTop: "2px" }}>Шаг {step} из 2</div>
               </div>
-              <button onClick={() => setShowSetup(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#BBB", fontSize: "20px", lineHeight: 1 }}>×</button>
+              <button onClick={() => { setShowSetup(false); resetSetupState(); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#BBB", fontSize: "20px", lineHeight: 1 }}>×</button>
             </div>
 
             <div style={{ padding: "20px 24px" }}>
               {step === 1 && (
                 <>
-                  <div style={{ fontSize: "13px", color: "#666", marginBottom: "16px" }}>Выберите почтового провайдера:</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {PROVIDERS.map((p) => (
-                      <div
-                        key={p.id}
-                        onClick={() => setSelectedProvider(p.id)}
-                        style={{
-                          display: "flex", alignItems: "center", gap: "12px",
-                          padding: "12px 14px", borderRadius: "8px", cursor: "pointer",
-                          border: `1px solid ${selectedProvider === p.id ? SAGE + "80" : "rgba(0,0,0,0.1)"}`,
-                          background: selectedProvider === p.id ? `color-mix(in oklch, ${SAGE} 8%, transparent)` : "#FFF",
-                          transition: "all 0.12s",
-                        }}
-                      >
-                        {p.icon}
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 500, fontSize: "13.5px", color: "#111" }}>{p.name}</div>
-                          <div style={{ fontSize: "11.5px", color: "#999", marginTop: "2px" }}>{p.hint}</div>
+                  <div style={{ fontSize: "13px", color: "#666", marginBottom: "14px" }}>Введите email, а настройки подставим автоматически.</div>
+                  <label style={{ fontSize: "12px", fontWeight: 500, color: "#666", display: "block", marginBottom: "5px" }}>Email</label>
+                  <input
+                    autoFocus
+                    type="email"
+                    placeholder="you@yandex.ru"
+                    value={form.from_email}
+                    onChange={(e) => handleEmailChange(e.target.value)}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: "7px", border: `1px solid rgba(0,0,0,0.12)`, outline: "none", fontSize: "13.5px", fontFamily: "inherit", color: "#1A1A1A", boxSizing: "border-box" }}
+                  />
+                  {form.from_email && !emailReady && (
+                    <div style={{ marginTop: "8px", fontSize: "12px", color: "#C53030" }}>Введите корректный email.</div>
+                  )}
+                  {emailReady && providerMeta && currentProvider && (
+                    <div style={{ marginTop: "14px", display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", borderRadius: "8px", border: `1px solid ${currentProvider === "custom" ? "rgba(0,0,0,0.1)" : SAGE + "70"}`, background: currentProvider === "custom" ? "#FFF" : `color-mix(in oklch, ${SAGE} 7%, transparent)` }}>
+                      <ProviderIcon provider={currentProvider} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: "13.5px", color: "#111" }}>{providerMeta.name}</div>
+                        <div style={{ fontSize: "11.5px", color: "#888", marginTop: "2px", lineHeight: 1.4 }}>
+                          {providerMeta.hint}
+                          {isAutoDetected && detectedHost && detectedPort ? ` · ${detectedHost}:${detectedPort}` : ""}
                         </div>
-                        {selectedProvider === p.id && (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={SAGE} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        )}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
+                  {emailReady && currentProvider === "custom" && (
+                    <div style={{ marginTop: "10px", fontSize: "12px", color: "#888", lineHeight: 1.45 }}>
+                      Домен не распознан. На следующем шаге потребуется SMTP-хост и порт.
+                    </div>
+                  )}
                   <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "20px" }}>
                     <button
-                      disabled={!selectedProvider}
-                      onClick={() => setStep(2)}
-                      style={{ padding: "8px 20px", borderRadius: "7px", background: selectedProvider ? SAGE : "#E5E5E5", color: selectedProvider ? "#FFF" : "#AAA", border: "none", fontSize: "13.5px", fontWeight: 500, cursor: selectedProvider ? "pointer" : "default", fontFamily: "inherit" }}
+                      disabled={!emailReady}
+                      onClick={continueFromEmail}
+                      style={{ padding: "8px 20px", borderRadius: "7px", background: emailReady ? SAGE : "#E5E5E5", color: emailReady ? "#FFF" : "#AAA", border: "none", fontSize: "13.5px", fontWeight: 500, cursor: emailReady ? "pointer" : "default", fontFamily: "inherit" }}
                     >
                       Далее
                     </button>
@@ -169,30 +387,107 @@ export default function SmtpPage() {
 
               {step === 2 && (
                 <>
-                  <div style={{ fontSize: "13px", color: "#666", marginBottom: "16px" }}>Введите данные учётной записи:</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    {[
-                      { label: "Email", placeholder: "you@gmail.com", type: "email" },
-                      { label: "Пароль приложения", placeholder: "xxxx xxxx xxxx xxxx", type: "password" },
-                      { label: "Имя отправителя", placeholder: "Алексей Иванов", type: "text" },
-                    ].map(({ label, placeholder, type }) => (
-                      <div key={label}>
-                        <label style={{ fontSize: "12px", fontWeight: 500, color: "#666", display: "block", marginBottom: "5px" }}>{label}</label>
-                        <input
-                          type={type}
-                          placeholder={placeholder}
-                          style={{ width: "100%", padding: "9px 12px", borderRadius: "7px", border: `1px solid rgba(0,0,0,0.12)`, outline: "none", fontSize: "13.5px", fontFamily: "inherit", color: "#1A1A1A", boxSizing: "border-box" }}
-                        />
+                  {isOauth && currentProvider === "gmail" ? (
+                    <>
+                      <div style={{ textAlign: "center", padding: "12px 0 8px" }}>
+                        <div style={{ display: "flex", justifyContent: "center", marginBottom: "14px" }}>
+                          <ProviderIcon provider="gmail" size={48} />
+                        </div>
+                        <div style={{ fontSize: "14px", fontWeight: 600, color: "#111", marginBottom: "8px" }}>Подключить Gmail</div>
+                        <div style={{ fontSize: "12.5px", color: "#888", lineHeight: "1.5", maxWidth: "320px", margin: "0 auto 20px" }}>
+                          Войдите в Google аккаунт {form.from_email}. Пароль приложения не нужен.
+                        </div>
+                        <button
+                          onClick={handleGmailOAuth}
+                          disabled={gmailConnecting}
+                          style={{ padding: "10px 24px", borderRadius: "7px", background: "#EA4335", color: "#FFF", border: "none", fontSize: "13.5px", fontWeight: 500, cursor: "pointer", fontFamily: "inherit", opacity: gmailConnecting ? 0.7 : 1 }}
+                        >
+                          {gmailConnecting ? "Перенаправление..." : "Войти через Google"}
+                        </button>
                       </div>
-                    ))}
-                  </div>
+                    </>
+                  ) : (
+                    <>
+                      {providerMeta && currentProvider && (
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+                          <ProviderIcon provider={currentProvider} />
+                          <div>
+                            <div style={{ fontSize: "13.5px", fontWeight: 600, color: "#111" }}>{providerMeta.name}</div>
+                            <div style={{ fontSize: "11.5px", color: "#888", marginTop: "2px" }}>{form.from_email}</div>
+                          </div>
+                        </div>
+                      )}
+                      {createMut.error && (
+                        <div style={{ marginBottom: "12px", padding: "8px 12px", borderRadius: "6px", background: "#FFF5F5", border: "1px solid #FEB2B2", fontSize: "12.5px", color: "#C53030" }}>
+                          {(createMut.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Ошибка подключения"}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                        {[
+                          { key: "password", label: "Пароль приложения", placeholder: "xxxx xxxx xxxx xxxx", type: "password" },
+                          ...(isCustom ? [
+                            { key: "host", label: "SMTP-хост", placeholder: "smtp.example.com", type: "text" },
+                            { key: "port", label: "Порт", placeholder: "587", type: "text" },
+                          ] : []),
+                        ].map(({ key, label, placeholder, type }) => (
+                          <div key={key}>
+                            <label style={{ fontSize: "12px", fontWeight: 500, color: "#666", display: "block", marginBottom: "5px" }}>{label}</label>
+                            <input
+                              type={type}
+                              placeholder={placeholder}
+                              value={form[key as keyof FormState]}
+                              onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                              style={{ width: "100%", padding: "9px 12px", borderRadius: "7px", border: `1px solid rgba(0,0,0,0.12)`, outline: "none", fontSize: "13.5px", fontFamily: "inherit", color: "#1A1A1A", boxSizing: "border-box" }}
+                            />
+                          </div>
+                        ))}
+                        {isAutoDetected && (
+                          <div style={{ fontSize: "12px", color: "#888", padding: "6px 10px", borderRadius: "6px", background: "#F7FAFC", border: "1px solid rgba(0,0,0,0.07)" }}>
+                            SMTP определён автоматически: {detectedHost}:{detectedPort}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setShowAdvanced((v) => !v)}
+                          style={{ alignSelf: "flex-start", background: "none", border: "none", color: "#666", padding: 0, fontSize: "12.5px", cursor: "pointer", fontFamily: "inherit" }}
+                        >
+                          {showAdvanced ? "Скрыть дополнительные поля" : "Дополнительные поля"}
+                        </button>
+                        {showAdvanced && (
+                          <>
+                            {[
+                              { key: "from_name", label: "Имя отправителя", placeholder: defaultSenderName(form.from_email), type: "text" },
+                              { key: "username", label: "SMTP-логин", placeholder: form.from_email, type: "text" },
+                            ].map(({ key, label, placeholder, type }) => (
+                              <div key={key}>
+                                <label style={{ fontSize: "12px", fontWeight: 500, color: "#666", display: "block", marginBottom: "5px" }}>{label}</label>
+                                <input
+                                  type={type}
+                                  placeholder={placeholder}
+                                  value={form[key as keyof FormState]}
+                                  onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                                  style={{ width: "100%", padding: "9px 12px", borderRadius: "7px", border: `1px solid rgba(0,0,0,0.12)`, outline: "none", fontSize: "13.5px", fontFamily: "inherit", color: "#1A1A1A", boxSizing: "border-box" }}
+                                />
+                              </div>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
                   <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginTop: "20px" }}>
                     <button onClick={() => setStep(1)} style={{ padding: "8px 16px", borderRadius: "7px", border: `1px solid ${BORDER}`, background: "#FFF", fontSize: "13px", cursor: "pointer", fontFamily: "inherit", color: "#555" }}>
                       Назад
                     </button>
-                    <button onClick={() => setShowSetup(false)} style={{ padding: "8px 20px", borderRadius: "7px", background: SAGE, color: "#FFF", border: "none", fontSize: "13.5px", fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
-                      Подключить
-                    </button>
+                    {!isOauth && (
+                      <button
+                        onClick={handleConnect}
+                        disabled={createMut.isPending || !canConnect}
+                        style={{ padding: "8px 20px", borderRadius: "7px", background: SAGE, color: "#FFF", border: "none", fontSize: "13.5px", fontWeight: 500, cursor: canConnect ? "pointer" : "default", fontFamily: "inherit", opacity: createMut.isPending || !canConnect ? 0.7 : 1 }}
+                      >
+                        {createMut.isPending ? "Подключение..." : "Подключить"}
+                      </button>
+                    )}
                   </div>
                 </>
               )}

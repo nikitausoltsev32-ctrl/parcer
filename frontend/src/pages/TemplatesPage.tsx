@@ -1,20 +1,28 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../lib/api";
 
 const SAGE = "oklch(0.52 0.10 165)";
 const BORDER = "rgba(0,0,0,0.08)";
 
-const TEMPLATES = [
-  { id: 1, name: "Холодное знакомство", subject: "Привет от Лиды", category: "Холодные", usedIn: 3, openRate: 42 },
-  { id: 2, name: "Followup через 3 дня", subject: "Хотел уточнить", category: "Followup", usedIn: 2, openRate: 58 },
-  { id: 3, name: "КП + кейсы", subject: "Коммерческое предложение", category: "Прогрев", usedIn: 1, openRate: 35 },
-];
+interface Template {
+  id: string;
+  name: string;
+  subject: string | null;
+  category: string | null;
+}
 
 export default function TemplatesPage() {
   const [search, setSearch] = useState("");
 
+  const { data: templates = [], isLoading } = useQuery<Template[]>({
+    queryKey: ["templates"],
+    queryFn: () => api.get("/templates").then((r) => r.data),
+  });
+
   const filtered = search
-    ? TEMPLATES.filter((t) => t.name.toLowerCase().includes(search.toLowerCase()))
-    : TEMPLATES;
+    ? templates.filter((t) => (t.name ?? "").toLowerCase().includes(search.toLowerCase()))
+    : templates;
 
   const cell: React.CSSProperties = {
     padding: "12px 16px", fontSize: "13px", color: "#333",
@@ -38,7 +46,7 @@ export default function TemplatesPage() {
       }}>
         <div>
           <span style={{ fontSize: "14px", fontWeight: 600, color: "#111" }}>Шаблоны</span>
-          <span style={{ fontSize: "13px", color: "#AAA", marginLeft: "8px" }}>{TEMPLATES.length} шаблона</span>
+          <span style={{ fontSize: "13px", color: "#AAA", marginLeft: "8px" }}>{templates.length} шаблонов</span>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
           <div style={{
@@ -66,44 +74,46 @@ export default function TemplatesPage() {
       </div>
 
       <div style={{ flex: 1, overflow: "auto", padding: "20px 24px" }}>
-        <div style={{ borderRadius: "8px", border: `1px solid ${BORDER}`, overflow: "hidden", background: "#FFF" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                {["Название", "Тема письма", "Категория", "Кампаний", "Открываемость"].map((col) => (
-                  <th key={col} style={headCell}>{col}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((t) => (
-                <tr
-                  key={t.id}
-                  style={{ cursor: "pointer" }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.02)"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                >
-                  <td style={{ ...cell, fontWeight: 500, color: "#111" }}>{t.name}</td>
-                  <td style={{ ...cell, color: "#666" }}>{t.subject}</td>
-                  <td style={cell}>
-                    <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11.5px", fontWeight: 500, background: "#F0FFF4", color: "#276749", border: "1px solid #9AE6B4" }}>
-                      {t.category}
-                    </span>
-                  </td>
-                  <td style={{ ...cell, fontFamily: "'JetBrains Mono', monospace", fontSize: "12.5px" }}>{t.usedIn}</td>
-                  <td style={cell}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div style={{ width: "60px", height: "4px", borderRadius: "2px", background: "#EEE", overflow: "hidden" }}>
-                        <div style={{ width: `${t.openRate}%`, height: "100%", background: SAGE, borderRadius: "2px" }} />
-                      </div>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "12px", color: "#666" }}>{t.openRate}%</span>
-                    </div>
-                  </td>
+        {isLoading ? (
+          <div style={{ color: "#AAA", fontSize: "13px", padding: "32px 0", textAlign: "center" }}>Загрузка…</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: "64px", gap: "10px" }}>
+            <div style={{ fontSize: "14.5px", fontWeight: 500, color: "#333" }}>Нет шаблонов</div>
+            <div style={{ fontSize: "13px", color: "#999" }}>Создайте первый шаблон через чат с Лидой</div>
+          </div>
+        ) : (
+          <div style={{ borderRadius: "8px", border: `1px solid ${BORDER}`, overflow: "hidden", background: "#FFF" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  {["Название", "Тема письма", "Категория"].map((col) => (
+                    <th key={col} style={headCell}>{col}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filtered.map((t) => (
+                  <tr
+                    key={t.id}
+                    style={{ cursor: "pointer" }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.02)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                  >
+                    <td style={{ ...cell, fontWeight: 500, color: "#111" }}>{t.name}</td>
+                    <td style={{ ...cell, color: "#666" }}>{t.subject ?? <span style={{ color: "#CCC" }}>—</span>}</td>
+                    <td style={cell}>
+                      {t.category ? (
+                        <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11.5px", fontWeight: 500, background: "#F0FFF4", color: "#276749", border: "1px solid #9AE6B4" }}>
+                          {t.category}
+                        </span>
+                      ) : <span style={{ color: "#CCC" }}>—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

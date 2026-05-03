@@ -12,6 +12,7 @@ class Campaign(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String, default="")
     list_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("contact_lists.id"))
     template_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("templates.id"))
     smtp_account_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("smtp_accounts.id"))

@@ -1,5 +1,8 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { useState } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useLogout, useMe } from "../features/auth/hooks";
+import OnboardingModal from "./OnboardingModal";
+import SetupWizard from "./SetupWizard";
 
 const SAGE = "oklch(0.52 0.10 165)";
 
@@ -96,6 +99,9 @@ const NAV_ITEMS = [
 export default function AppLayout() {
   const logout = useLogout();
   const { data: me } = useMe();
+  const navigate = useNavigate();
+  const [showTour, setShowTour] = useState(() => !localStorage.getItem("lida_onboarding_seen"));
+  const [showWizard, setShowWizard] = useState(false);
 
   const initials = me?.full_name
     ? me.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()
@@ -104,6 +110,18 @@ export default function AppLayout() {
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", fontFamily: "'Manrope', sans-serif" }}>
+      {showTour && (
+        <OnboardingModal
+          onDone={() => {
+            setShowTour(false);
+            if (!me?.business_profile?.business) setShowWizard(true);
+          }}
+          onRegister={() => navigate("/register")}
+        />
+      )}
+      {!showTour && showWizard && (
+        <SetupWizard onDone={() => setShowWizard(false)} />
+      )}
       <aside style={{
         width: "200px",
         minWidth: "200px",

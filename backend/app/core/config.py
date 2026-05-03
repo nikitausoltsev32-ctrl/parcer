@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     twogis_api_key: str = ""
     serpapi_key: str = ""
     firecrawl_api_key: str = ""
+    hunter_api_key: str = ""
 
     # Transactional email
     transactional_smtp_host: str = ""
@@ -54,6 +55,11 @@ class Settings(BaseSettings):
     transactional_smtp_user: str = ""
     transactional_smtp_pass: str = ""
     transactional_from_email: str = "noreply@parcer.ru"
+
+    # Google OAuth
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "http://localhost:8000/api/v1/smtp-accounts/gmail/oauth/callback"
 
     # Monitoring
     sentry_dsn: str = ""

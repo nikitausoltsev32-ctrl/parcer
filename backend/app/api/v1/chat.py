@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.models.chat import ChatMessage, ChatSession
 from app.models.user import User
 from app.services.chat.agent import stream_agent
+from app.services.llm.factory import get_available_chat_models
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -22,6 +23,12 @@ class SessionCreate(BaseModel):
 
 class MessageRequest(BaseModel):
     content: str
+    model: str | None = None
+
+
+@router.get("/models")
+async def list_chat_models(user: User = Depends(get_current_user)):
+    return get_available_chat_models()
 
 
 @router.post("/sessions", status_code=201)
@@ -110,7 +117,7 @@ async def post_message(
         await db.commit()
 
     return StreamingResponse(
-        stream_agent(db, session, user, body.content, history),
+        stream_agent(db, session, user, body.content, history, model=body.model),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

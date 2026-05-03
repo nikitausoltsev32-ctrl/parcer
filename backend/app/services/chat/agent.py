@@ -74,6 +74,8 @@ async def stream_agent(
     user: User,
     user_text: str,
     history: list[ChatMessage],
+    *,
+    model: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """Yield SSE-совместимые строки: data: <json>\n\n"""
 
@@ -126,7 +128,7 @@ async def stream_agent(
         return
 
     try:
-        client = get_llm_client("chat")
+        client = get_llm_client("chat", model_override=model)
     except Exception:
         logger.exception("chat: failed to initialize llm client")
         yield sse("error", {"message": "Не удалось подключить модель. Проверьте настройки LLM и попробуйте снова."})

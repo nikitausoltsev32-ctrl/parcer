@@ -15,7 +15,7 @@ async def get_me(user: User = Depends(get_current_user)):
 
 
 @router.patch("", response_model=UserRead)
-async def update_me(body: UserUpdate, user: User = Depends(get_verified_user), db: AsyncSession = Depends(get_db)):
+async def update_me(body: UserUpdate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     if body.full_name is not None:
         user.full_name = body.full_name
     if body.business_profile is not None:

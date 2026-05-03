@@ -4,6 +4,7 @@ from app.models.chat import ChatMessage, ChatSession
 from app.models.company import Company
 from app.models.contact import Contact, ContactList
 from app.models.event import Event
+from app.models.inbox_message import InboxMessage
 from app.models.smtp_account import SmtpAccount
 from app.models.suppression import Suppression
 from app.models.template import Template
@@ -23,4 +24,5 @@ __all__ = [
     "Event",
     "ChatSession",
     "ChatMessage",
+    "InboxMessage",
 ]

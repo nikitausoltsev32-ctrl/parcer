@@ -6,12 +6,15 @@ import { streamSSE } from "../lib/sse";
 const SAGE = "oklch(0.52 0.10 165)";
 const BORDER = "rgba(0,0,0,0.08)";
 
-const MODELS = [
-  { id: "llama", label: "Llama 3.3", sub: "по умолчанию" },
-  { id: "gpt4o", label: "GPT-4o", sub: "OpenAI" },
-  { id: "claude", label: "Claude 3.5", sub: "Anthropic" },
-  { id: "gemini", label: "Gemini Pro", sub: "Google" },
-  { id: "minimax", label: "MiniMax", sub: "MiniMax" },
+interface ChatModel {
+  id: string;
+  label: string;
+  sub: string;
+}
+
+const DEFAULT_MODELS: ChatModel[] = [
+  { id: "groq/llama-3.3-70b-versatile", label: "Llama 3.3", sub: "Groq" },
+  { id: "openrouter/minimax/minimax-m2.5:free", label: "MiniMax M2", sub: "OpenRouter" },
 ];
 
 const HINT_CHIPS = ["Найти компании", "Обогатить контакты", "Создать письмо"];
@@ -88,9 +91,18 @@ function ToolProgress({ steps }: { steps: ToolStep[] }) {
   );
 }
 
-function ModelSelector() {
+function ModelSelector({
+  models,
+  value,
+  onChange,
+}: {
+  models: ChatModel[];
+  value: ChatModel | null;
+  onChange: (m: ChatModel) => void;
+}) {
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState(MODELS[0]);
+  const selected = value;
+  const setSelected = onChange;
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -104,21 +116,23 @@ function ModelSelector() {
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => { if (selected && models.length > 0) setOpen((o) => !o); }}
+        disabled={!selected || models.length === 0}
         style={{
           display: "flex", alignItems: "center", gap: "5px",
           padding: "4px 9px", borderRadius: "6px",
           border: `1px solid rgba(0,0,0,0.1)`,
           background: "transparent", color: "#666",
-          fontSize: "12px", cursor: "pointer", fontFamily: "inherit",
+          fontSize: "12px", cursor: selected && models.length > 0 ? "pointer" : "default", fontFamily: "inherit",
+          opacity: selected && models.length > 0 ? 1 : 0.65,
         }}
       >
-        {selected.label}
+        {selected ? selected.label : "Модели не настроены"}
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}>
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
-      {open && (
+      {open && selected && (
         <div style={{
           position: "absolute", bottom: "calc(100% + 6px)", left: 0,
           background: "#FFF",
@@ -128,7 +142,7 @@ function ModelSelector() {
           overflow: "hidden", minWidth: "180px", zIndex: 50,
         }}>
           <div style={{ padding: "6px 10px 4px", fontSize: "10.5px", fontWeight: 600, color: "#AAA", textTransform: "uppercase", letterSpacing: "0.07em" }}>Модель</div>
-          {MODELS.map((m) => (
+          {models.map((m) => (
             <div
               key={m.id}
               onClick={() => { setSelected(m); setOpen(false); }}
@@ -171,6 +185,8 @@ export default function ChatPage() {
   const [activeTabId, setActiveTabId] = useState(1);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [models, setModels] = useState<ChatModel[]>(DEFAULT_MODELS);
+  const [selectedModel, setSelectedModel] = useState<ChatModel | null>(DEFAULT_MODELS[0]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const activeTab = tabs.find((t) => t.id === activeTabId)!;
@@ -178,6 +194,21 @@ export default function ChatPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeTab?.messages]);
+
+  useEffect(() => {
+    let alive = true;
+    api.get<ChatModel[]>("/chat/models")
+      .then((res) => {
+        if (!alive) return;
+        const next = Array.isArray(res.data) ? res.data : [];
+        setModels(next);
+        setSelectedModel((current) => next.find((m) => m.id === current?.id) ?? next[0] ?? null);
+      })
+      .catch(() => {
+        // Keep static defaults when backend has not been updated yet.
+      });
+    return () => { alive = false; };
+  }, []);
 
   function updateTab(id: number, updater: (t: Tab) => Tab) {
     setTabs((prev) => prev.map((t) => (t.id === id ? updater(t) : t)));
@@ -209,7 +240,7 @@ export default function ChatPage() {
 
   async function sendMessage() {
     const text = input.trim();
-    if (!text || loading) return;
+    if (!text || loading || !selectedModel) return;
     setInput("");
     setLoading(true);
 
@@ -240,7 +271,7 @@ export default function ChatPage() {
             "Content-Type": "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
-          body: JSON.stringify({ content: text }),
+          body: JSON.stringify({ content: text, model: selectedModel.id }),
         },
         (ev) => {
           try {
@@ -452,7 +483,7 @@ export default function ChatPage() {
           />
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px 10px" }}>
             <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
-              <ModelSelector />
+              <ModelSelector models={models} value={selectedModel} onChange={setSelectedModel} />
               {HINT_CHIPS.map((hint) => (
                 <button
                   key={hint}
@@ -469,19 +500,19 @@ export default function ChatPage() {
             </div>
             <button
               onClick={sendMessage}
-              disabled={!input.trim() || loading}
+              disabled={!input.trim() || loading || !selectedModel}
               style={{
                 width: "32px", height: "32px", borderRadius: "7px",
-                background: input.trim() && !loading ? SAGE : "#E5E5E5",
+                background: input.trim() && !loading && selectedModel ? SAGE : "#E5E5E5",
                 border: "none",
-                cursor: input.trim() && !loading ? "pointer" : "default",
+                cursor: input.trim() && !loading && selectedModel ? "pointer" : "default",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 transition: "background 0.15s",
                 flexShrink: 0,
               }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                stroke={input.trim() && !loading ? "#FFF" : "#AAA"}
+                stroke={input.trim() && !loading && selectedModel ? "#FFF" : "#AAA"}
                 strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="19" x2="12" y2="5" />
                 <polyline points="5 12 12 5 19 12" />

@@ -43,6 +43,17 @@ export function useVerifyEmail() {
   });
 }
 
+export function useUpdateMe() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { full_name?: string; business_profile?: { business?: string; offer?: string; city?: string; tone_default?: string } }) =>
+      api.patch("/me", data).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["me"] });
+    },
+  });
+}
+
 export function useLogout() {
   const qc = useQueryClient();
   const navigate = useNavigate();

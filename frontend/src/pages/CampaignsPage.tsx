@@ -1,19 +1,45 @@
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../lib/api";
+
 const SAGE = "oklch(0.52 0.10 165)";
 const BORDER = "rgba(0,0,0,0.08)";
 
-const CAMPAIGNS = [
-  { id: 1, name: "Дизайн-студии Казань", status: "Активна", contacts: 7, sent: 5, opened: 3, replied: 1, created: "26 апр" },
-  { id: 2, name: "IT-компании Москва", status: "Черновик", contacts: 14, sent: 0, opened: 0, replied: 0, created: "24 апр" },
-  { id: 3, name: "Агентства недвижимости", status: "Завершена", contacts: 22, sent: 22, opened: 11, replied: 4, created: "10 апр" },
-];
+interface Campaign {
+  id: string;
+  name: string;
+  status: string;
+  stats: Record<string, number> | null;
+  created_at: string;
+}
 
-const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  "Активна":   { bg: "#EBF8FF", text: "#2B6CB0", border: "#90CDF4" },
-  "Черновик":  { bg: "#F7FAFC", text: "#718096", border: "#CBD5E0" },
-  "Завершена": { bg: "#F0FFF4", text: "#276749", border: "#9AE6B4" },
+const STATUS_LABELS: Record<string, string> = {
+  draft: "Черновик",
+  generating: "Генерация",
+  generated: "Готова",
+  sending: "Отправка",
+  sent: "Отправлена",
+  paused: "Пауза",
 };
 
+const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  draft:      { bg: "#F7FAFC", text: "#718096", border: "#CBD5E0" },
+  generating: { bg: "#FFFBEB", text: "#B45309", border: "#FCD34D" },
+  generated:  { bg: "#EBF8FF", text: "#2B6CB0", border: "#90CDF4" },
+  sending:    { bg: "#FFF5F0", text: "#C05621", border: "#FBD38D" },
+  sent:       { bg: "#F0FFF4", text: "#276749", border: "#9AE6B4" },
+  paused:     { bg: "#F7FAFC", text: "#718096", border: "#CBD5E0" },
+};
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+}
+
 export default function CampaignsPage() {
+  const { data: campaigns = [], isLoading } = useQuery<Campaign[]>({
+    queryKey: ["campaigns"],
+    queryFn: () => api.get("/campaigns").then((r) => r.data),
+  });
+
   const cell: React.CSSProperties = {
     padding: "12px 16px", fontSize: "13px", color: "#333",
     borderBottom: "1px solid rgba(0,0,0,0.05)",
@@ -47,51 +73,65 @@ export default function CampaignsPage() {
       </div>
 
       <div style={{ flex: 1, overflow: "auto", padding: "20px 24px" }}>
-        <div style={{ borderRadius: "8px", border: `1px solid ${BORDER}`, overflow: "hidden", background: "#FFF" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                {["Кампания", "Статус", "Контакты", "Отправлено", "Открыто", "Ответили", "Создана"].map((col) => (
-                  <th key={col} style={headCell}>{col}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {CAMPAIGNS.map((c) => {
-                const cs = STATUS_COLORS[c.status] ?? STATUS_COLORS["Черновик"];
-                return (
-                  <tr
-                    key={c.id}
-                    style={{ cursor: "pointer" }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.02)"; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                  >
-                    <td style={{ ...cell, fontWeight: 500, color: "#111" }}>{c.name}</td>
-                    <td style={cell}>
-                      <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11.5px", fontWeight: 500, background: cs.bg, color: cs.text, border: `1px solid ${cs.border}` }}>
-                        {c.status}
-                      </span>
-                    </td>
-                    <td style={{ ...cell, ...mono }}>{c.contacts}</td>
-                    <td style={{ ...cell, ...mono }}>
-                      {c.sent > 0 ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          {c.sent}
-                          <div style={{ width: "60px", height: "4px", borderRadius: "2px", background: "#EEE", overflow: "hidden" }}>
-                            <div style={{ width: `${(c.sent / c.contacts) * 100}%`, height: "100%", background: SAGE, borderRadius: "2px" }} />
+        {isLoading ? (
+          <div style={{ color: "#AAA", fontSize: "13px", padding: "32px 0", textAlign: "center" }}>Загрузка...</div>
+        ) : campaigns.length === 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: "64px", gap: "10px" }}>
+            <div style={{ fontSize: "14.5px", fontWeight: 500, color: "#333" }}>Нет кампаний</div>
+            <div style={{ fontSize: "13px", color: "#999" }}>Создайте первую кампанию через чат с Лидой</div>
+          </div>
+        ) : (
+          <div style={{ borderRadius: "8px", border: `1px solid ${BORDER}`, overflow: "hidden", background: "#FFF" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  {["Кампания", "Статус", "Сгенерировано", "Отправлено", "Ошибок", "Создана"].map((col) => (
+                    <th key={col} style={headCell}>{col}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {campaigns.map((c) => {
+                  const stats = c.stats ?? {};
+                  const generated = stats.generated ?? 0;
+                  const sent = stats.sent ?? 0;
+                  const failed = stats.failed ?? 0;
+                  const cs = STATUS_COLORS[c.status] ?? STATUS_COLORS.draft;
+                  return (
+                    <tr
+                      key={c.id}
+                      style={{ cursor: "pointer" }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.02)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                    >
+                      <td style={{ ...cell, fontWeight: 500, color: "#111" }}>{c.name || "—"}</td>
+                      <td style={cell}>
+                        <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11.5px", fontWeight: 500, background: cs.bg, color: cs.text, border: `1px solid ${cs.border}` }}>
+                          {STATUS_LABELS[c.status] ?? c.status}
+                        </span>
+                      </td>
+                      <td style={{ ...cell, ...mono }}>{generated > 0 ? generated : <span style={{ color: "#CCC" }}>—</span>}</td>
+                      <td style={{ ...cell, ...mono }}>
+                        {sent > 0 ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            {sent}
+                            {generated > 0 && (
+                              <div style={{ width: "60px", height: "4px", borderRadius: "2px", background: "#EEE", overflow: "hidden" }}>
+                                <div style={{ width: `${(sent / generated) * 100}%`, height: "100%", background: SAGE, borderRadius: "2px" }} />
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ) : <span style={{ color: "#CCC" }}>—</span>}
-                    </td>
-                    <td style={{ ...cell, ...mono }}>{c.opened > 0 ? c.opened : <span style={{ color: "#CCC" }}>—</span>}</td>
-                    <td style={{ ...cell, ...mono }}>{c.replied > 0 ? c.replied : <span style={{ color: "#CCC" }}>—</span>}</td>
-                    <td style={{ ...cell, color: "#999", fontSize: "12px" }}>{c.created}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                        ) : <span style={{ color: "#CCC" }}>—</span>}
+                      </td>
+                      <td style={{ ...cell, ...mono }}>{failed > 0 ? <span style={{ color: "#E53E3E" }}>{failed}</span> : <span style={{ color: "#CCC" }}>—</span>}</td>
+                      <td style={{ ...cell, color: "#999", fontSize: "12px" }}>{formatDate(c.created_at)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
