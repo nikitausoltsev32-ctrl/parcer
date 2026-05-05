@@ -7,6 +7,7 @@ from app.api.v1 import (
     companies,
     contacts,
     inbox,
+    lead_search,
     reminders,
     smtp_accounts,
     templates,
@@ -21,6 +22,7 @@ router.include_router(companies.router)
 router.include_router(contacts.router)
 router.include_router(campaigns.router)
 router.include_router(inbox.router)
+router.include_router(lead_search.router)
 router.include_router(reminders.router)
 router.include_router(smtp_accounts.router)
 router.include_router(templates.router)

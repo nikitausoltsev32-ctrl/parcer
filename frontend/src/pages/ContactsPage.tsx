@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { LeadSearchPanel } from "../components/LeadSearchPanel";
 
 const SAGE = "oklch(0.52 0.10 165)";
 const BORDER = "rgba(0,0,0,0.08)";
@@ -113,6 +114,8 @@ export default function ContactsPage() {
           </button>
         </div>
       </div>
+
+      <LeadSearchPanel />
 
       <div style={{ flex: 1, overflow: "auto", padding: "20px 24px" }}>
         {isLoading ? (
