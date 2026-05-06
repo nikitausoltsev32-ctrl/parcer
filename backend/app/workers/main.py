@@ -13,6 +13,24 @@ import procrastinate
 from app.core.config import settings
 
 
+def _build_html(body: str, open_url: str, unsub_url: str) -> str:
+    import html as _html
+    paragraphs = "".join(
+        f"<p>{_html.escape(line) if line.strip() else '&nbsp;'}</p>"
+        for line in body.splitlines()
+    )
+    return (
+        "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body "
+        "style='font-family:Arial,sans-serif;font-size:15px;color:#222;max-width:600px;margin:0 auto;padding:24px'>"
+        f"{paragraphs}"
+        "<hr style='border:none;border-top:1px solid #eee;margin:24px 0'>"
+        f"<p style='font-size:12px;color:#999'>Вы получили это письмо, так как ваш адрес был в списке получателей. "
+        f"<a href='{unsub_url}' style='color:#999'>Отписаться</a></p>"
+        f"<img src='{open_url}' width='1' height='1' style='display:none' alt=''>"
+        "</body></html>"
+    )
+
+
 def _psycopg_conninfo(database_url: str | None = None) -> str:
     url = database_url or settings.database_url
     if url.startswith("postgresql+asyncpg://"):
@@ -46,69 +64,80 @@ async def generate_letters(campaign_id: str) -> None:
 
     async with AsyncSessionLocal() as db:
         row = await db.execute(select(Campaign).where(Campaign.id == uuid.UUID(campaign_id)))
-        campaign = row.scalar_one()
+        campaign = row.scalar_one_or_none()
+        if not campaign:
+            return
 
-        user_row = await db.execute(select(User).where(User.id == campaign.user_id))
-        user = user_row.scalar_one()
+        try:
+            user_row = await db.execute(select(User).where(User.id == campaign.user_id))
+            user = user_row.scalar_one()
 
-        tmpl_row = await db.execute(select(Template).where(Template.id == campaign.template_id))
-        template = tmpl_row.scalar_one()
+            tmpl_row = await db.execute(select(Template).where(Template.id == campaign.template_id))
+            template = tmpl_row.scalar_one()
 
-        contacts_row = await db.execute(
-            select(Contact).where(Contact.list_id == campaign.list_id, Contact.email.isnot(None))
-        )
-        contacts = contacts_row.scalars().all()
+            contacts_row = await db.execute(
+                select(Contact).where(Contact.list_id == campaign.list_id, Contact.email.isnot(None))
+            )
+            contacts = contacts_row.scalars().all()
 
-        bp = user.business_profile or {}
-        sender = {
-            "name": user.full_name or "",
-            "business": bp.get("business", ""),
-            "offer": bp.get("offer", ""),
-            "city": bp.get("city", ""),
-        }
-
-        generated = 0
-        for contact in contacts:
-            enrich = contact.enrichment or {}
-            contact_data = {
-                "company_name": contact.contact_name or "",
-                "contact_name": contact.contact_name or "",
-                "website": enrich.get("website", ""),
-                "industry": (contact.raw or {}).get("industry", ""),
-                "city": (contact.raw or {}).get("city", ""),
-                "website_summary": enrich.get("website_summary", ""),
+            bp = user.business_profile or {}
+            sender = {
+                "name": user.full_name or "",
+                "business": bp.get("business", ""),
+                "offer": bp.get("offer", ""),
+                "city": bp.get("city", ""),
             }
-            try:
-                result = await generate_letter(
-                    sender=sender,
-                    contact=contact_data,
-                    template_name=template.name,
-                    template_instruction=template.custom_instruction or "",
-                    tone=template.tone,
-                )
-                db.add(CampaignMessage(
-                    id=uuid.uuid4(),
-                    campaign_id=campaign.id,
-                    contact_id=contact.id,
-                    subject=result.get("subject", ""),
-                    body=result.get("body", ""),
-                    status="pending",
-                ))
-                generated += 1
-            except Exception as e:
-                db.add(CampaignMessage(
-                    id=uuid.uuid4(),
-                    campaign_id=campaign.id,
-                    contact_id=contact.id,
-                    status="failed",
-                    error=str(e),
-                ))
 
-        stats = dict(campaign.stats or {})
-        stats["generated"] = generated
-        campaign.stats = stats
-        campaign.status = "generated"
-        await db.commit()
+            generated = 0
+            for contact in contacts:
+                enrich = contact.enrichment or {}
+                raw = contact.raw or {}
+                contact_data = {
+                    "company_name": raw.get("company") or contact.contact_name or "",
+                    "contact_name": contact.contact_name or "",
+                    "website": enrich.get("website", ""),
+                    "industry": raw.get("industry", ""),
+                    "city": enrich.get("city") or raw.get("city", ""),
+                    "website_summary": enrich.get("description") or enrich.get("website_summary", ""),
+                }
+                try:
+                    result = await generate_letter(
+                        sender=sender,
+                        contact=contact_data,
+                        template_name=template.name,
+                        template_instruction=template.custom_instruction or "",
+                        tone=template.tone,
+                    )
+                    db.add(CampaignMessage(
+                        id=uuid.uuid4(),
+                        campaign_id=campaign.id,
+                        contact_id=contact.id,
+                        subject=result.get("subject", ""),
+                        body=result.get("body", ""),
+                        status="pending",
+                    ))
+                    generated += 1
+                except Exception as e:
+                    db.add(CampaignMessage(
+                        id=uuid.uuid4(),
+                        campaign_id=campaign.id,
+                        contact_id=contact.id,
+                        status="failed",
+                        error=str(e)[:500],
+                    ))
+
+            stats = dict(campaign.stats or {})
+            stats["generated"] = generated
+            campaign.stats = stats
+            campaign.status = "generated"
+            await db.commit()
+        except Exception as e:
+            campaign.status = "failed"
+            stats = dict(campaign.stats or {})
+            stats["error"] = str(e)[:500]
+            campaign.stats = stats
+            await db.commit()
+            raise
 
 
 @app.task(queue="default", retry=procrastinate.RetryStrategy(max_attempts=3))
@@ -157,15 +186,21 @@ async def send_email(message_id: str) -> None:
             return
 
         try:
-            unsub_url = f"{settings.base_url}/api/v1/track/unsubscribe?id={msg.tracking_id}"
-            body_with_footer = (
+            from app.core import tracking as trk
+            tid = str(msg.tracking_id)
+            _unsub_url = trk.unsub_url(tid)
+            _open_url = trk.open_url(tid)
+
+            plain_body = (
                 f"{msg.body}\n\n---\n"
-                f"Чтобы отписаться от рассылки, перейдите по ссылке: {unsub_url}"
+                f"Чтобы отписаться от рассылки: {_unsub_url}"
             )
+            html_body = _build_html(msg.body, _open_url, _unsub_url)
 
             if smtp.oauth_refresh_token:
                 from app.services.gmail import send_message as gmail_send
-                await gmail_send(smtp, contact.email, msg.subject, body_with_footer, db, unsub_url=unsub_url)
+                await gmail_send(smtp, contact.email, msg.subject, plain_body, db,
+                                 unsub_url=_unsub_url, html_body=html_body)
             else:
                 password = decrypt_password(smtp.password_encrypted)
 
@@ -174,9 +209,10 @@ async def send_email(message_id: str) -> None:
                     mime["Subject"] = msg.subject
                     mime["From"] = f"{smtp.from_name} <{smtp.from_email}>"
                     mime["To"] = contact.email
-                    mime["List-Unsubscribe"] = f"<{unsub_url}>"
+                    mime["List-Unsubscribe"] = f"<{_unsub_url}>"
                     mime["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
-                    mime.attach(MIMEText(body_with_footer, "plain", "utf-8"))
+                    mime.attach(MIMEText(plain_body, "plain", "utf-8"))
+                    mime.attach(MIMEText(html_body, "html", "utf-8"))
                     ctx = ssl.create_default_context()
                     if smtp.port == 465:
                         with smtplib.SMTP_SSL(smtp.host, smtp.port, context=ctx, timeout=30) as s:
@@ -189,7 +225,7 @@ async def send_email(message_id: str) -> None:
                             s.login(smtp.username, password)
                             s.sendmail(smtp.from_email, contact.email, mime.as_string())
 
-                await asyncio.get_event_loop().run_in_executor(None, _send)
+                await asyncio.to_thread(_send)
 
             msg.status = "sent"
             msg.sent_at = datetime.now(UTC)

@@ -39,7 +39,7 @@ async def test_stream_agent_forces_search_when_model_does_not_call_tool(monkeypa
             "total": 1,
         }
 
-    monkeypatch.setattr("app.services.chat.agent.get_llm_client", lambda task: _NoToolClient())
+    monkeypatch.setattr("app.services.chat.agent.get_llm_client", lambda task, **kwargs: _NoToolClient())
     monkeypatch.setitem(agent_module.HANDLERS, "search_companies", fake_search)
 
     chunks = [
@@ -73,7 +73,7 @@ async def test_stream_agent_runs_explicit_search_without_calling_llm(monkeypatch
         calls.append(args)
         return {"companies": [], "total": 0}
 
-    monkeypatch.setattr("app.services.chat.agent.get_llm_client", lambda task: _ExplodingClient())
+    monkeypatch.setattr("app.services.chat.agent.get_llm_client", lambda task, **kwargs: _ExplodingClient())
     monkeypatch.setitem(agent_module.HANDLERS, "search_companies", fake_search)
 
     chunks = [
@@ -99,7 +99,7 @@ async def test_stream_agent_returns_sse_error_when_llm_fails(monkeypatch, db_ses
     db_session.add_all([user, session])
     await db_session.commit()
 
-    monkeypatch.setattr("app.services.chat.agent.get_llm_client", lambda task: _ExplodingClient())
+    monkeypatch.setattr("app.services.chat.agent.get_llm_client", lambda task, **kwargs: _ExplodingClient())
 
     chunks = [
         chunk

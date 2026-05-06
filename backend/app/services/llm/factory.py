@@ -5,7 +5,13 @@ from app.services.llm.groq import GroqClient
 from app.services.llm.minimax import MiniMaxClient
 from app.services.llm.qwen import QwenClient
 
-_OPENAI_PROVIDERS = {"groq": GroqClient, "qwen": QwenClient, "glm": GLMClient, "minimax": MiniMaxClient, "openrouter": MiniMaxClient}
+_OPENAI_PROVIDERS = {
+    "groq": GroqClient,
+    "qwen": QwenClient,
+    "glm": GLMClient,
+    "minimax": MiniMaxClient,
+    "openrouter": MiniMaxClient,
+}
 
 CHAT_MODEL_OPTIONS = [
     {

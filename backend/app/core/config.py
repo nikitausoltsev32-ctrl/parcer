@@ -44,8 +44,8 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
 
     # Search
-    twogis_api_key: str = ""
     serpapi_key: str = ""
+    yandex_maps_api_key: str = ""
     firecrawl_api_key: str = ""
     hunter_api_key: str = ""
 

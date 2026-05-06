@@ -17,19 +17,55 @@ from app.services.llm.base import LLMMessage
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """Ты — Лида, ИИ-агент по продажам для бизнеса пользователя в России.
-Помогаешь пользователю: искать компании-клиентов, писать персональные письма,
-вести CRM, отвечать на входящие. Работаешь через вызов функций (tools).
+SYSTEM_PROMPT = """Ты — Лида, ИИ-ассистент по продажам для бизнеса пользователя в России.
+Помогаешь искать клиентов, писать персональные письма, вести CRM, отвечать на входящие.
+Говоришь по-русски, кратко, без канцелярита. Не упоминай, что ты AI.
 
-Говоришь по-русски, кратко, без канцелярита.
-Когда пользователь явно просит действие (найти компании, сохранить список, обогатить) — вызывай нужный tool. Не переспрашивай лишнего.
-Когда задача неясна — задай один точный вопрос. При обычном разговоре отвечай текстом без вызова tools.
-Не выдумывай факты о клиентах пользователя.
-Не упоминай, что ты AI или языковая модель.
+## Когда вызывать tools
+- Пользователь просит найти компании/клиентов → search_companies
+- Пользователь подтверждает сохранение списка → save_companies
+- Пользователь хочет запустить рассылку → сначала list_resources чтобы уточнить list_id/template_id/smtp_account_id,
+  потом create_campaign
+- Пользователь спрашивает про конкретную компанию → get_company_info
+- Нужны доступные списки/шаблоны/ящики → list_resources
+Не переспрашивай лишнего. Если задача неясна — задай один точный вопрос.
+
+## Флоу поиска (строго соблюдай порядок)
+
+**Шаг 1 — поиск:** вызови search_companies с query и city из запроса пользователя.
+
+**Шаг 2 — вывод результатов:** покажи каждую компанию отдельной строкой в формате:
+`N. **[Название](сайт)** — краткое описание чем занимается · 📧 email · 📍 город`
+
+Правила формата:
+- Если есть website — делай название кликабельной ссылкой [Название](https://...)
+- Если есть email — показывай после · 📧
+- Если есть website_summary или description — 1 фраза своими словами что делает компания
+- Если нет ни summary ни description — пиши рубрику/отрасль из поля industry
+- Если нет ни того ни другого — пиши только название и город
+- Каждая компания с новой строки, не склеивай в абзац
+- Не повторяй одинаковые фразы для всех компаний
+
+**Шаг 3 — предложи действие:** после списка ВСЕГДА добавляй одну строку:
+`Сохранить список для рассылки? Или уточнить поиск?`
+
+## После сохранения списка
+Сообщи сколько контактов сохранено и предложи:
+`Готово! Запустить рассылку по этому списку?`
+
+## Входящие и CRM
+- «Есть ли ответы?» / «Кто написал?» → check_inbox, покажи список с классификацией
+- После check_inbox если есть interested/question → предложи suggest_reply для каждого
+- «Ответь ему», «что написать» → suggest_reply, покажи варианты пронумерованным списком
+- «Отметь как заинтересованного», «поставь статус» → update_contact
+- «Напомни», «перезвоню» → set_reminder, подтверди дату и действие
+
+## Не выдумывай факты о клиентах пользователя.
 """
 
 
 _SEARCH_TRIGGERS = ("найди", "найти", "подбери", "ищу", "нужны", "find", "search")
+_IMPORT_URL_RE = re.compile(r"import://[0-9a-fA-F-]{36}")
 
 
 def _forced_search_args(user_text: str) -> dict | None:
@@ -55,6 +91,15 @@ def _forced_search_args(user_text: str) -> dict | None:
     if not query:
         return None
     return {"query": query, "city": city, "limit": 20}
+
+
+def _forced_import_args(user_text: str) -> dict | None:
+    match = _IMPORT_URL_RE.search(user_text)
+    if not match:
+        return None
+    text = user_text.lower()
+    confirmed = "confirmed=true" in text or "confirm import" in text or "подтверж" in text
+    return {"file_url": match.group(0), "confirmed": confirmed}
 
 
 def _system_with_profile(user: User) -> str:
@@ -84,7 +129,31 @@ async def stream_agent(
 
     messages: list[LLMMessage] = [LLMMessage(role="system", content=_system_with_profile(user))]
     for msg in history[-20:]:
-        messages.append(LLMMessage(role=msg.role, content=msg.content))
+        if msg.role == "assistant" and msg.tool_calls:
+            rebuilt_calls = []
+            for tc in msg.tool_calls:
+                args = tc["arguments"]
+                if not isinstance(args, str):
+                    args = json.dumps(args, ensure_ascii=False)
+                rebuilt_calls.append({
+                    "id": tc["id"],
+                    "type": "function",
+                    "function": {"name": tc["name"], "arguments": args},
+                })
+            messages.append(LLMMessage(
+                role="assistant",
+                content=msg.content,
+                tool_calls=rebuilt_calls,
+            ))
+            for tr in (msg.tool_results or []):
+                messages.append(LLMMessage(
+                    role="tool",
+                    content=json.dumps(tr.get("result", {}), ensure_ascii=False),
+                    tool_call_id=tr.get("id"),
+                    name=tr.get("name"),
+                ))
+        else:
+            messages.append(LLMMessage(role=msg.role, content=msg.content))
     messages.append(LLMMessage(role="user", content=user_text))
 
     # Сохраняем сообщение пользователя
@@ -97,10 +166,49 @@ async def stream_agent(
     db.add(user_msg)
     await db.commit()
 
+    import_args = _forced_import_args(user_text)
+    if import_args:
+        tool_call_id = f"forced-{uuid.uuid4()}"
+        tool_call = {
+            "id": tool_call_id,
+            "name": "import_contacts",
+            "arguments": import_args,
+        }
+        yield sse("tool_calls", {"tool_calls": [tool_call]})
+
+        handler_args = dict(import_args)
+        handler_args["__db"] = db
+        handler_args["__user"] = user
+        tool_result = await HANDLERS["import_contacts"](handler_args)
+        yield sse("tool_result", {"name": "import_contacts", "result": tool_result})
+
+        assistant_msg = ChatMessage(
+            id=uuid.uuid4(),
+            session_id=session.id,
+            role="assistant",
+            content=None,
+            tool_calls=[tool_call],
+            tool_results=[{"id": tool_call_id, "name": "import_contacts", "result": tool_result}],
+        )
+        db.add(assistant_msg)
+        session.last_message_at = datetime.now(UTC)
+        await db.commit()
+        yield sse("done", {})
+        return
+
+    try:
+        client = get_llm_client("chat", model_override=model)
+    except Exception:
+        logger.exception("chat: failed to initialize llm client")
+        yield sse("error", {"message": "Не удалось подключить модель. Проверьте настройки LLM и попробуйте снова."})
+        yield sse("done", {})
+        return
+
     fallback_args = _forced_search_args(user_text)
     if fallback_args:
+        tool_call_id = f"forced-{uuid.uuid4()}"
         tool_call = {
-            "id": f"forced-{uuid.uuid4()}",
+            "id": tool_call_id,
             "name": "search_companies",
             "arguments": fallback_args,
         }
@@ -118,22 +226,29 @@ async def stream_agent(
             role="assistant",
             content=None,
             tool_calls=[tool_call],
-            tool_results=[{"id": tool_call["id"], "name": "search_companies", "result": tool_result}],
+            tool_results=[{"id": tool_call_id, "name": "search_companies", "result": tool_result}],
         )
         db.add(assistant_msg)
-        session.last_message_at = datetime.now(UTC)
         await db.commit()
-
         yield sse("done", {})
         return
 
-    try:
-        client = get_llm_client("chat", model_override=model)
-    except Exception:
-        logger.exception("chat: failed to initialize llm client")
-        yield sse("error", {"message": "Не удалось подключить модель. Проверьте настройки LLM и попробуйте снова."})
-        yield sse("done", {})
-        return
+        # Догружаем в LLM-историю чтобы модель описала результаты
+        messages.append(LLMMessage(
+            role="assistant",
+            content=None,
+            tool_calls=[{
+                "id": tool_call_id, "type": "function",
+                "function": {"name": "search_companies", "arguments": json.dumps(fallback_args, ensure_ascii=False)},
+            }],
+        ))
+        messages.append(LLMMessage(
+            role="tool",
+            content=json.dumps(tool_result, ensure_ascii=False),
+            tool_call_id=tool_call_id,
+            name="search_companies",
+        ))
+        # Дальше провалится в общий tool-loop, который сделает text-ответ
 
     # Tool-calling loop (до 5 итераций)
     for _ in range(5):

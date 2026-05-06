@@ -120,7 +120,16 @@ async def get_valid_access_token(account, db: AsyncSession) -> str:
 
 # ── Sending ────────────────────────────────────────────────────────────────────
 
-async def send_message(account, to_email: str, subject: str, body: str, db: AsyncSession, *, unsub_url: str | None = None) -> None:
+async def send_message(
+    account,
+    to_email: str,
+    subject: str,
+    body: str,
+    db: AsyncSession,
+    *,
+    unsub_url: str | None = None,
+    html_body: str | None = None,
+) -> None:
     token = await get_valid_access_token(account, db)
     mime = MIMEMultipart("alternative")
     mime["Subject"] = subject
@@ -130,6 +139,8 @@ async def send_message(account, to_email: str, subject: str, body: str, db: Asyn
         mime["List-Unsubscribe"] = f"<{unsub_url}>"
         mime["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     mime.attach(MIMEText(body, "plain", "utf-8"))
+    if html_body:
+        mime.attach(MIMEText(html_body, "html", "utf-8"))
     raw = base64.urlsafe_b64encode(mime.as_bytes()).decode().rstrip("=")
 
     async with httpx.AsyncClient(timeout=15) as client:

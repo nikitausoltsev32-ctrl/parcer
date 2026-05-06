@@ -51,7 +51,7 @@
 **Источники лидов:**
 - CSV/XLSX импорт (автодетект колонок + превью). Основной путь.
 - Ручное добавление одной записи.
-- Через чат: «Найди студии дизайна в Казани» — AI предложит CSV или справочник (feature-flag 2ГИС).
+- Через чат: «Найди студии дизайна в Казани» — AI ищет через SerpAPI (Google Maps + Yandex), обогащает Firecrawl-ом и Hunter-ом.
 
 **CRM-lite (память ассистента):**
 - `companies` и `contacts` (one-to-many, контакт принадлежит компании).
@@ -116,7 +116,7 @@
 Регистрация (email+пароль) → verify → чат-онбординг (3 вопроса)
   ↓
 [Чат]: «Нужны клиенты для дизайн-студии в Казани»
-  ↓ AI предлагает: загрузить CSV / ввести вручную / 2ГИС (flag)
+  ↓ AI предлагает: загрузить CSV / ввести вручную / поиск (SerpAPI Google + Yandex)
 [Пользователь]: загружает CSV на 50 строк
   ↓ AI: показывает таблицу-карточку, валидирует email
 [Пользователь]: «Напиши им письма»
@@ -322,7 +322,7 @@ Snake_case. PK — `uuid v4` (`gen_random_uuid()` в SQL, `uuid.uuid4()` в Pyth
 | id | uuid pk | |
 | user_id | uuid fk | |
 | name | text | |
-| source | text | `csv\|manual\|2gis` |
+| source | text | `csv\|manual\|serp_maps\|serp_yandex` |
 | source_meta | jsonb | |
 | total_count | int | |
 | created_at | timestamptz | |
@@ -546,7 +546,7 @@ REST + JSON, префикс `/api/v1`. Auth: `Authorization: Bearer <access>`, r
 
 ### Источники
 - `GET /sources` — enabled/disabled флаги.
-- `POST /sources/2gis/search` (feature-flag).
+- Поиск компаний — через chat tool `search_companies` (SerpAPI Google Maps + Yandex).
 
 ### SMTP
 - `GET|POST /smtp-accounts`, `PATCH|DELETE /smtp-accounts/{id}`.
@@ -771,7 +771,7 @@ LLM_CLASSIFY_MODEL=llama-3.1-8b-instant
 
 **Фаза 7 — Платный запуск (2 нед):** ЮKassa, тарификация, история, public launch на VC/Habr. **Веха:** 5 платящих.
 
-**Фаза 8+:** 2ГИС (когда ключ), Telegram как канал, amoCRM webhook, sequence, Yandex Search, Авито, AI-deep-analysis.
+**Фаза 8+:** Google Places API (New) напрямую, Telegram как канал, amoCRM webhook, sequence, Авито, AI-deep-analysis.
 
 **Анти-задачи:** Google Search, WhatsApp, прогрев, мобильные нативы, Kubernetes.
 
@@ -805,7 +805,7 @@ LLM_CLASSIFY_MODEL=llama-3.1-8b-instant
 - Отвечать по-русски, если вопрос по-русски.
 - НЕ использовать слова «парсер», «скрапер», «база email», «массовая холодная рассылка» в копии продукта.
 - НЕ предлагать Google Search, WhatsApp Business API, Kubernetes, Elasticsearch, прогрев доменов — вне scope.
-- НЕ считать 2ГИС/Яндекс/Авито доступными по умолчанию — только под feature-flag.
+- НЕ считать Авито доступным. Поиск идёт через SerpAPI (Google Maps + Yandex).
 - CSV-импорт — рабочий fallback при любых сомнениях о источнике.
 - Не менять схему БД без новой миграции в `supabase/migrations/`.
 - Не использовать Alembic — миграции через Supabase CLI.

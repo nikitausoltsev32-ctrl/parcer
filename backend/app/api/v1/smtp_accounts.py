@@ -114,8 +114,8 @@ async def verify_smtp(
             if not account.host or not account.port or not account.username or not account.password_encrypted:
                 raise ValueError("SMTP account is incomplete")
             password = decrypt_password(account.password_encrypted)
-            await asyncio.get_event_loop().run_in_executor(
-                None, _try_send, account.host, account.port, account.username, password
+            await asyncio.to_thread(
+                _try_send, account.host, account.port, account.username, password
             )
         account.last_verified_at = datetime.now(UTC)
         account.is_active = True

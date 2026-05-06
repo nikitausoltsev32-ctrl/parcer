@@ -11,6 +11,7 @@ from app.api.v1 import (
     reminders,
     smtp_accounts,
     templates,
+    tracking,
     users,
 )
 
@@ -26,6 +27,7 @@ router.include_router(lead_search.router)
 router.include_router(reminders.router)
 router.include_router(smtp_accounts.router)
 router.include_router(templates.router)
+router.include_router(tracking.router)
 
 
 @router.get("/health")
