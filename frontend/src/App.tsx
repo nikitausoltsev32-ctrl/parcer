@@ -16,7 +16,7 @@ import SmtpPage from "./pages/SmtpPage";
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/app" replace />} />
+      <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
@@ -32,7 +32,7 @@ export default function App() {
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 
-      <Route path="*" element={<Navigate to="/app" replace />} />
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 }

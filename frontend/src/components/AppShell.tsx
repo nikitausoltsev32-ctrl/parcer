@@ -1,7 +1,6 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useMe } from "../features/auth/hooks";
 import AppLayout from "./AppLayout";
-import LandingPage from "../pages/LandingPage";
 
 export default function AppShell() {
   const { data, isLoading } = useMe();
@@ -16,9 +15,7 @@ export default function AppShell() {
   }
 
   if (!data) {
-    const isRoot = location.pathname === "/app" || location.pathname === "/app/";
-    if (isRoot) return <LandingPage />;
-    return <Navigate to="/app" replace />;
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
   return <AppLayout />;

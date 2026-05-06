@@ -62,7 +62,7 @@ export function useLogout() {
     onSettled: () => {
       clearToken();
       qc.clear();
-      navigate("/app");
+      navigate("/login");
     },
   });
 }

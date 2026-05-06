@@ -34,7 +34,7 @@ api.interceptors.response.use(
         return api.request(err.config);
       } catch {
         clearToken();
-        window.location.href = "/app";
+        window.location.href = "/login";
       }
     }
     return Promise.reject(err);
