@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { G, SOURCE_BADGE } from "../lib/design";
@@ -145,15 +145,20 @@ export default function CompaniesPage() {
     queryFn: () => api.get("/contacts?limit=100").then((r) => r.data),
   });
 
-  const companies = contactsToCompanies(contacts);
-  const filtered = search
+  // ⚡ Bolt: Memoize expensive computations to prevent re-calculation on every render
+  // This is critical because mouse movements trigger hoverPos state updates constantly,
+  // which would otherwise cause O(n) recalculations on every frame
+  const companies = useMemo(() => contactsToCompanies(contacts), [contacts]);
+  const filtered = useMemo(() => search
     ? companies.filter((c) =>
         c.name.toLowerCase().includes(search.toLowerCase()) ||
         (c.industry ?? "").toLowerCase().includes(search.toLowerCase())
       )
-    : companies;
+    : companies, [companies, search]);
 
-  const hoveredCompany = companies.find((c) => c.name === hoveredName);
+  const hoveredCompany = useMemo(() =>
+    companies.find((c) => c.name === hoveredName),
+  [companies, hoveredName]);
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
