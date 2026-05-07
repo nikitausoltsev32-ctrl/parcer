@@ -36,6 +36,10 @@ async def test_run_lead_search_saves_contact_list_contacts_and_log(monkeypatch, 
             },
         ]
 
+    async def fake_generate_queries(query: str, city: str | None, service_offered: str, log):
+        return [query]
+
+    monkeypatch.setattr("app.services.leads.pipeline.generate_queries", fake_generate_queries)
     monkeypatch.setattr("app.services.leads.pipeline.search_companies", fake_search_companies)
 
     result = await run_lead_search(
