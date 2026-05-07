@@ -107,6 +107,77 @@ function ConfidenceBadge({ state }: { state?: string }) {
   );
 }
 
+function LeadInsightCell({ company, summary }: { company: Company; summary: string }) {
+  const signals = [
+    company.website ? "сайт" : null,
+    company.email ? "email" : null,
+    company.phone ? "телефон" : null,
+    company.industry ? company.industry : null,
+  ].filter(Boolean) as string[];
+  const hasSummary = Boolean(summary.trim());
+
+  return (
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: "7px",
+      minWidth: "280px",
+      maxWidth: "380px",
+    }}>
+      <div style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: "8px",
+      }}>
+        <div style={{
+          width: "22px",
+          height: "22px",
+          borderRadius: G.radiusXs,
+          background: hasSummary ? "rgba(43,108,176,0.10)" : "rgba(26,37,64,0.06)",
+          border: hasSummary ? "1px solid rgba(43,108,176,0.18)" : "1px solid rgba(26,37,64,0.10)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          marginTop: "1px",
+        }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={hasSummary ? G.blue : G.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 19.5V4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 0 4 22"/>
+            <path d="M8 7h8"/><path d="M8 11h7"/><path d="M8 15h5"/>
+          </svg>
+        </div>
+        <div style={{
+          color: hasSummary ? G.textSecondary : G.textMuted,
+          lineHeight: "1.45",
+          fontSize: "12.7px",
+        }}>
+          {hasSummary ? summary : "Описание пока не найдено. Нужен сайт, сниппет или deep-анализ."}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
+        {(signals.length ? signals : ["мало данных"]).slice(0, 4).map((signal) => (
+          <span
+            key={signal}
+            style={{
+              fontSize: "10.5px",
+              fontWeight: 650,
+              padding: "2px 7px",
+              borderRadius: "999px",
+              background: signal === "мало данных" ? "rgba(26,37,64,0.05)" : "rgba(45,122,95,0.09)",
+              color: signal === "мало данных" ? G.textMuted : G.green,
+              border: signal === "мало данных" ? "1px solid rgba(26,37,64,0.08)" : "1px solid rgba(45,122,95,0.16)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {signal}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Tool run status ───────────────────────────────────────────
 function ToolRunStatus({ steps }: { steps: ToolStep[] }) {
   const [expanded, setExpanded] = useState(false);
@@ -242,7 +313,7 @@ function LeadResultsCard({ companies, onSaveRequest }: { companies: Company[]; o
             <tr style={{ background: "rgba(255,255,255,0.25)" }}>
               <th style={thS}></th>
               <th style={thS}>Компания</th>
-              <th style={{ ...thS, minWidth: "260px" }}>Описание</th>
+              <th style={{ ...thS, minWidth: "300px" }}>Описание</th>
               <th style={thS}>Сайт</th>
               <th style={thS}>Город / адрес</th>
               <th style={thS}>Телефон</th>
@@ -281,13 +352,11 @@ function LeadResultsCard({ companies, onSaveRequest }: { companies: Company[]; o
                   <td style={{ ...tdS, fontWeight: 600, color: G.textPrimary }}>{c.name}</td>
                   <td style={{
                     ...tdS,
-                    minWidth: "260px",
-                    maxWidth: "340px",
+                    minWidth: "300px",
+                    maxWidth: "420px",
                     whiteSpace: "normal",
-                    lineHeight: "1.42",
-                    color: summary ? G.textSecondary : G.textMuted,
                   }}>
-                    {summary || "—"}
+                    <LeadInsightCell company={c} summary={summary} />
                   </td>
                   <td style={tdS}>
                     {c.website
