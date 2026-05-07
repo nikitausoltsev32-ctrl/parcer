@@ -12,7 +12,7 @@ async def test_post_lead_search_creates_saved_search(monkeypatch, client):
             list_id="00000000-0000-0000-0000-000000000001",
             list_name=list_name or "Search",
             saved=1,
-            contacts=[{"name": "Studio One", "website": "https://studio.test", "score": 80}],
+            leads=[{"name": "Studio One", "website": "https://studio.test", "score": 80}],
             log_id="00000000-0000-0000-0000-000000000002",
         )
 

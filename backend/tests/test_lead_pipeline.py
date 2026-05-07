@@ -2,7 +2,7 @@ import uuid
 
 from sqlalchemy import select
 
-from app.models.contact import Contact, ContactList
+from app.models.lead import Lead, LeadList
 from app.models.lead_processing_log import LeadProcessingLog
 from app.models.user import User
 from app.services.leads.pipeline import run_lead_search
@@ -53,12 +53,12 @@ async def test_run_lead_search_saves_contact_list_contacts_and_log(monkeypatch, 
     assert result.contacts[0]["phone"] == "+7 999 000-00-00"
     assert result.contacts[0]["score"] >= 80
 
-    contact_list = (await db_session.execute(select(ContactList))).scalar_one()
-    contact = (await db_session.execute(select(Contact))).scalar_one()
+    lead_list = (await db_session.execute(select(LeadList))).scalar_one()
+    lead = (await db_session.execute(select(Lead))).scalar_one()
     log = (await db_session.execute(select(LeadProcessingLog))).scalar_one()
 
-    assert contact_list.source == "search"
-    assert contact.raw["domain"] == "studio.test"
-    assert contact.enrichment["lead_score"] == result.contacts[0]["score"]
+    assert lead_list.source == "search"
+    assert lead.domain == "studio.test"
+    assert lead.lead_fit["score"] == result.contacts[0]["score"]
     assert log.urls_found == 2
     assert log.urls_after_filter == 1

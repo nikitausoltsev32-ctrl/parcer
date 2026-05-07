@@ -369,7 +369,6 @@ async def enrich_contact_task(contact_id: str) -> None:
 async def cleanup_empty_contact_lists(timestamp: int) -> None:
     """Delete contact lists with 0 contacts that are older than 1 hour."""
     from sqlalchemy import delete, func, select
-    from sqlalchemy.orm import aliased
 
     from app.core.database import AsyncSessionLocal
     from app.models.contact import Contact, ContactList
