@@ -33,6 +33,8 @@ async def run_lead_search(
     limit: int,
     list_name: str | None = None,
 ) -> LeadSearchResult:
+    import time
+    _t0 = time.monotonic()
     clean_query = " ".join(query.split())
     clean_city = " ".join(city.split()) if city else None
     capped_limit = max(1, min(limit, 50))
@@ -131,6 +133,7 @@ async def run_lead_search(
         total_cost_usd=0,
         ai_credits_used=0,
         outcome="success",
+        duration_ms=int((time.monotonic() - _t0) * 1000),
         meta={"city": clean_city, "limit": capped_limit},
     )
     db.add(log)

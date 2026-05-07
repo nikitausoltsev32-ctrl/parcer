@@ -205,3 +205,42 @@ async def _get_contact(contact_id: str, user_id: uuid.UUID, db: AsyncSession) ->
     if not row or row.user_id != user_id:
         raise HTTPException(status_code=404, detail="Contact not found")
     return row
+
+
+@router.get("/contact-lists")
+async def list_contact_lists(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await db.execute(
+        select(ContactList)
+        .where(ContactList.user_id == user.id)
+        .order_by(ContactList.created_at.desc())
+    )
+    return [
+        {
+            "id": str(cl.id),
+            "name": cl.name,
+            "source": cl.source,
+            "total_count": cl.total_count,
+            "created_at": cl.created_at.isoformat(),
+        }
+        for cl in rows.scalars()
+    ]
+
+
+@router.delete("/contact-lists/{list_id}", status_code=204)
+async def delete_contact_list(
+    list_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        lid = uuid.UUID(list_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid list_id")
+    row = await db.get(ContactList, lid)
+    if not row or row.user_id != user.id:
+        raise HTTPException(status_code=404, detail="List not found")
+    await db.delete(row)
+    await db.commit()

@@ -3,7 +3,7 @@ import asyncio
 import smtplib
 import ssl
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -362,3 +362,30 @@ async def enrich_contact_task(contact_id: str) -> None:
 
     async with AsyncSessionLocal() as db:
         await enrich_contact(contact_id=contact_id, db=db)
+
+
+@app.periodic(cron="0 */6 * * *")
+@app.task(queue="default")
+async def cleanup_empty_contact_lists(timestamp: int) -> None:
+    """Delete contact lists with 0 contacts that are older than 1 hour."""
+    from sqlalchemy import delete, func, select
+    from sqlalchemy.orm import aliased
+
+    from app.core.database import AsyncSessionLocal
+    from app.models.contact import Contact, ContactList
+
+    cutoff = datetime.now(UTC) - timedelta(hours=1)
+    async with AsyncSessionLocal() as db:
+        subq = (
+            select(Contact.list_id)
+            .where(Contact.list_id.isnot(None))
+            .group_by(Contact.list_id)
+            .having(func.count() > 0)
+        ).scalar_subquery()
+        await db.execute(
+            delete(ContactList).where(
+                ContactList.created_at < cutoff,
+                ContactList.id.not_in(subq),
+            )
+        )
+        await db.commit()
