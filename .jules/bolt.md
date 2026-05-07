@@ -1,0 +1,3 @@
+## 2026-05-07 - Inefficient Derived State with Hover Listeners
+**Learning:** In React components like CompaniesPage, `onMouseMove` listeners that update state (like `hoverPos`) can trigger full component re-renders up to 60 frames per second. If derived state (like a map over contacts or array filter) isn't memoized, it results in huge CPU overhead when a user interacts with the UI.
+**Action:** Always wrap expensive derived arrays (filtering, mapping) in `useMemo` when a component includes continuous high-frequency state updates (like mouse tracking or dragging) to prevent layout thrashing and keep O(n) operations off the main render path.
