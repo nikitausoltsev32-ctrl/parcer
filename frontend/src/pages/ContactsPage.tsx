@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LeadSearchPanel } from "../components/LeadSearchPanel";
+import { SearchHistoryPanel } from "../components/SearchHistoryPanel";
 import { api } from "../lib/api";
 import { G, SOURCE_BADGE, STATUS_BADGE } from "../lib/design";
 
@@ -91,12 +92,27 @@ function importErrorMessage(err: unknown): string {
   return "Import failed";
 }
 
+interface ContactList {
+  id: string;
+  name: string;
+  source: string | null;
+  total_count: number;
+}
+
+function scoreColor(score: number | null): string {
+  if (score === null) return G.textMuted;
+  if (score >= 75) return G.green;
+  if (score >= 50) return "#d97706";
+  return G.textMuted;
+}
+
 export default function ContactsPage() {
   const [search, setSearch] = useState("");
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [selectedListId, setSelectedListId] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
@@ -104,6 +120,29 @@ export default function ContactsPage() {
     queryKey: ["contacts"],
     queryFn: () => api.get("/contacts?limit=100").then((r) => r.data),
   });
+
+  const { data: contactLists = [] } = useQuery<ContactList[]>({
+    queryKey: ["contact-lists"],
+    queryFn: () => api.get("/contact-lists").then((r) => r.data),
+    retry: false,
+  });
+
+  const deleteListMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/contact-lists/${id}`),
+    onSuccess: () => {
+      setSelectedListId("");
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["contact-lists"] });
+    },
+  });
+
+  function handleDeleteList() {
+    if (!selectedListId) return;
+    const list = contactLists.find((l) => l.id === selectedListId);
+    if (!list) return;
+    if (!window.confirm(`Удалить список «${list.name}» и все его контакты?`)) return;
+    deleteListMutation.mutate(selectedListId);
+  }
 
   const previewMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -199,6 +238,41 @@ export default function ContactsPage() {
             />
           </div>
 
+          {contactLists.length > 0 && (
+            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+              <select
+                value={selectedListId}
+                onChange={(e) => setSelectedListId(e.target.value)}
+                style={{
+                  height: "34px", padding: "0 10px", borderRadius: G.radiusSm,
+                  border: G.border, background: "rgba(255,255,255,0.60)",
+                  color: G.textSecondary, fontSize: "12.5px", fontFamily: "inherit",
+                  outline: "none", cursor: "pointer",
+                }}
+              >
+                <option value="">Выбрать список…</option>
+                {contactLists.map((l) => (
+                  <option key={l.id} value={l.id}>{l.name} ({l.total_count})</option>
+                ))}
+              </select>
+              <button
+                onClick={handleDeleteList}
+                disabled={!selectedListId || deleteListMutation.isPending}
+                title="Удалить список"
+                style={{
+                  height: "34px", padding: "0 12px", borderRadius: G.radiusSm,
+                  border: `1px solid rgba(192,57,43,0.30)`,
+                  background: selectedListId ? G.redBg : "rgba(255,255,255,0.40)",
+                  color: selectedListId ? G.red : G.textMuted,
+                  fontSize: "12.5px", fontWeight: 500, fontFamily: "inherit",
+                  cursor: selectedListId && !deleteListMutation.isPending ? "pointer" : "not-allowed",
+                }}
+              >
+                {deleteListMutation.isPending ? "…" : "Удалить"}
+              </button>
+            </div>
+          )}
+
           <input ref={fileInputRef} type="file" accept=".csv,.tsv,.xlsx" style={{ display: "none" }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) selectImportFile(f); e.target.value = ""; }}
           />
@@ -236,6 +310,7 @@ export default function ContactsPage() {
       )}
 
       <LeadSearchPanel />
+      <SearchHistoryPanel />
 
       {preview && (
         <div style={{
@@ -336,7 +411,7 @@ export default function ContactsPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {["Имя", "Компания", "Статус", "Email", "Телефон", "Источник"].map((col) => (
+                  {["Имя", "Компания", "Статус", "Email", "Телефон", "Источник", "Score"].map((col) => (
                     <th key={col} style={thS}>{col}</th>
                   ))}
                 </tr>
@@ -373,6 +448,12 @@ export default function ContactsPage() {
                     </td>
                     <td style={{ ...tdS, color: G.textSecondary }}>{c.phone ?? <span style={{ color: G.textMuted }}>—</span>}</td>
                     <td style={tdS}><SourceBadge source={c.source} /></td>
+                    <td
+                      style={{ ...tdS, color: scoreColor(c.lead_score), fontWeight: 600, fontVariantNumeric: "tabular-nums" }}
+                      title={c.confidence ?? undefined}
+                    >
+                      {c.lead_score !== null ? c.lead_score : <span style={{ color: G.textMuted, fontWeight: 400 }}>—</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
