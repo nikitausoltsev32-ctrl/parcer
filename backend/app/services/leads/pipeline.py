@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.contact import Contact, ContactList
 from app.models.lead_processing_log import LeadProcessingLog
 from app.models.user import User
+from app.services.leads.dedup import deduplicate_candidates
 from app.services.leads.extraction import extract_public_contacts, normalize_domain, normalize_website
 from app.services.leads.scoring import score_candidate
 from app.services.search import search_companies
@@ -38,15 +39,10 @@ async def run_lead_search(
     capped_limit = max(1, min(limit, 50))
     raw_results = await search_companies(clean_query, clean_city, capped_limit)
 
-    seen_domains: set[str] = set()
     contacts_payload: list[dict[str, Any]] = []
     for raw in raw_results:
         website = normalize_website(raw.get("website"))
         domain = normalize_domain(website)
-        dedupe_key = domain or (raw.get("name") or "").strip().lower()
-        if not dedupe_key or dedupe_key in seen_domains:
-            continue
-        seen_domains.add(dedupe_key)
 
         text_blob = "\n".join(
             str(value)
@@ -77,6 +73,7 @@ async def run_lead_search(
         candidate["confidence"] = scored.confidence
         candidate["score_reason"] = scored.reason
         contacts_payload.append(candidate)
+    contacts_payload = deduplicate_candidates(contacts_payload)
 
     fallback_name = f"Поиск {datetime.now(UTC).date().isoformat()}"
     resolved_list_name = list_name or f"{clean_query} {clean_city or ''}".strip() or fallback_name
