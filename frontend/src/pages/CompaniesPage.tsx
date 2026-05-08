@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { G, SOURCE_BADGE } from "../lib/design";
@@ -145,13 +145,18 @@ export default function CompaniesPage() {
     queryFn: () => api.get("/contacts?limit=100").then((r) => r.data),
   });
 
-  const companies = contactsToCompanies(contacts);
-  const filtered = search
-    ? companies.filter((c) =>
-        c.name.toLowerCase().includes(search.toLowerCase()) ||
-        (c.industry ?? "").toLowerCase().includes(search.toLowerCase())
-      )
-    : companies;
+  // ⚡ Bolt: Memoize the derived companies array to prevent recalculating on every re-render
+  const companies = useMemo(() => contactsToCompanies(contacts), [contacts]);
+  // ⚡ Bolt: Memoize the filtered array and hoist lowerSearch outside the loop
+  // This changes the search string allocation from O(N) to O(1) and prevents re-filtering on hover state changes
+  const filtered = useMemo(() => {
+    if (!search) return companies;
+    const lowerSearch = search.toLowerCase();
+    return companies.filter((c) =>
+      c.name.toLowerCase().includes(lowerSearch) ||
+      (c.industry ?? "").toLowerCase().includes(lowerSearch)
+    );
+  }, [companies, search]);
 
   const hoveredCompany = companies.find((c) => c.name === hoveredName);
 

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LeadSearchPanel } from "../components/LeadSearchPanel";
 import { api } from "../lib/api";
@@ -153,12 +153,16 @@ export default function ContactsPage() {
     previewMutation.mutate(file);
   }
 
-  const filtered = search
-    ? contacts.filter((c) =>
-        (c.full_name ?? "").toLowerCase().includes(search.toLowerCase()) ||
-        (c.company_name ?? "").toLowerCase().includes(search.toLowerCase())
-      )
-    : contacts;
+  // ⚡ Bolt: Memoize the filtered array and hoist lowerSearch outside the loop
+  // This changes the search string allocation from O(N) to O(1) and prevents re-filtering on other state changes
+  const filtered = useMemo(() => {
+    if (!search) return contacts;
+    const lowerSearch = search.toLowerCase();
+    return contacts.filter((c) =>
+      (c.full_name ?? "").toLowerCase().includes(lowerSearch) ||
+      (c.company_name ?? "").toLowerCase().includes(lowerSearch)
+    );
+  }, [contacts, search]);
 
   const isError = importStatus?.startsWith("Error");
 

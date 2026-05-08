@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { G } from "../lib/design";
@@ -30,9 +30,13 @@ export default function TemplatesPage() {
     queryFn: () => api.get("/templates").then((r) => r.data),
   });
 
-  const filtered = search
-    ? templates.filter((t) => (t.name ?? "").toLowerCase().includes(search.toLowerCase()))
-    : templates;
+  // ⚡ Bolt: Memoize the filtered array and hoist lowerSearch outside the loop
+  // This changes the search string allocation from O(N) to O(1) and prevents re-filtering on other state changes
+  const filtered = useMemo(() => {
+    if (!search) return templates;
+    const lowerSearch = search.toLowerCase();
+    return templates.filter((t) => (t.name ?? "").toLowerCase().includes(lowerSearch));
+  }, [templates, search]);
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
