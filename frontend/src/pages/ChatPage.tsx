@@ -864,6 +864,8 @@ export default function ChatPage() {
                 <button
                   onClick={() => sendMessage()}
                   disabled={!input.trim() || loading || !selectedModel}
+                  aria-label="Send message"
+                  title="Send message"
                   style={{
                     width: "36px", height: "36px", borderRadius: "10px",
                     background: input.trim() && !loading && selectedModel ? G.navy : "rgba(26,37,64,0.08)",
@@ -1052,6 +1054,8 @@ export default function ChatPage() {
               <button
                 onClick={() => sendMessage()}
                 disabled={!input.trim() || loading || !selectedModel}
+                aria-label="Send message"
+                title="Send message"
                 style={{
                   width: "34px", height: "34px", borderRadius: "9px",
                   background: input.trim() && !loading && selectedModel ? G.navy : "rgba(26,37,64,0.10)",
