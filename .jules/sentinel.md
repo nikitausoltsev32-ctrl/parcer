@@ -1,0 +1,4 @@
+## 2024-05-09 - [CRITICAL] Insecure Database SSL Defaults
+**Vulnerability:** The application unconditionally disabled SSL certificate verification (`ssl.CERT_NONE`) and hostname checking for database connections, making it highly vulnerable to Man-in-the-Middle (MITM) attacks where an attacker could intercept or modify sensitive database traffic.
+**Learning:** Hardcoding insecure defaults like `CERT_NONE` to bypass self-signed certificate errors during local development exposes production to severe risks if left unchecked. Development convenience should not compromise production security.
+**Prevention:** Always use secure SSL defaults (`ssl.CERT_REQUIRED` and `check_hostname = True`). Create an explicit, opt-out configuration flag (e.g., `database_ssl_verify: bool = True`) that is clearly documented and defaults to secure behavior.
