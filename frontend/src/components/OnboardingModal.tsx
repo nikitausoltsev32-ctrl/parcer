@@ -269,7 +269,7 @@ export default function OnboardingModal({ onDone }: Props) {
       {/* Bottom nav */}
       {showBottomNav && (
         <div style={{ padding: "16px 28px 24px", display: "flex", gap: "10px", flexShrink: 0, position: "relative", zIndex: 5 }}>
-          <button onClick={goPrev} style={{ width: "54px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", height: "54px", borderRadius: "16px", background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.35)", color: "rgba(255,255,255,0.85)", cursor: "pointer" }}>
+          <button aria-label="Назад" onClick={goPrev} style={{ width: "54px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", height: "54px", borderRadius: "16px", background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.35)", color: "rgba(255,255,255,0.85)", cursor: "pointer" }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
           <button onClick={goNext} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", height: "54px", borderRadius: "16px", background: "white", color: "#1a2540", fontSize: "16px", fontWeight: 700, border: "none", cursor: "pointer", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
