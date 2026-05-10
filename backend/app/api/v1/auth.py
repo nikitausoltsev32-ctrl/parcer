@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Cookie, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.schemas.auth import (
     ForgotPasswordRequest,
@@ -37,14 +38,14 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 async def login(body: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
     access, refresh = await authenticate_user(db, body.email, body.password)
-    response.set_cookie("refresh_token", refresh, httponly=True, samesite="lax", max_age=REFRESH_MAX_AGE, secure=False)
+    response.set_cookie("refresh_token", refresh, httponly=True, samesite="lax", max_age=REFRESH_MAX_AGE, secure=settings.app_env == "production")
     return TokenResponse(access_token=access)
 
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh(response: Response, refresh_token: str | None = Cookie(default=None)):
     access, new_refresh = refresh_access(refresh_token)
-    response.set_cookie("refresh_token", new_refresh, httponly=True, samesite="lax", max_age=REFRESH_MAX_AGE, secure=False)
+    response.set_cookie("refresh_token", new_refresh, httponly=True, samesite="lax", max_age=REFRESH_MAX_AGE, secure=settings.app_env == "production")
     return TokenResponse(access_token=access)
 
 
