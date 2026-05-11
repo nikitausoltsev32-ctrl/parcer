@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { G, SOURCE_BADGE } from "../lib/design";
@@ -145,15 +145,23 @@ export default function CompaniesPage() {
     queryFn: () => api.get("/contacts?limit=100").then((r) => r.data),
   });
 
-  const companies = contactsToCompanies(contacts);
-  const filtered = search
-    ? companies.filter((c) =>
-        c.name.toLowerCase().includes(search.toLowerCase()) ||
-        (c.industry ?? "").toLowerCase().includes(search.toLowerCase())
-      )
-    : companies;
+  // ⚡ Bolt: Memoize companies extraction to prevent O(N) loop on every hover update
+  const companies = useMemo(() => contactsToCompanies(contacts), [contacts]);
 
-  const hoveredCompany = companies.find((c) => c.name === hoveredName);
+  // ⚡ Bolt: Memoize filtered list to prevent unnecessary string operations and array filtering on hover updates
+  const filtered = useMemo(() => {
+    if (!search) return companies;
+    const lowerSearch = search.toLowerCase();
+    return companies.filter((c) =>
+        c.name.toLowerCase().includes(lowerSearch) ||
+        (c.industry ?? "").toLowerCase().includes(lowerSearch)
+    );
+  }, [companies, search]);
+
+  // ⚡ Bolt: Memoize the hover object lookup
+  const hoveredCompany = useMemo(() =>
+    hoveredName ? companies.find((c) => c.name === hoveredName) : undefined,
+  [companies, hoveredName]);
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
