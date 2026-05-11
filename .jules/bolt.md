@@ -1,0 +1,3 @@
+## 2026-05-11 - Memoization for high-frequency events
+**Learning:** Components in this React project track high-frequency events (like `hoverPos` storing mouse coordinates on `onMouseMove`) in component state. This causes continuous re-renders. If O(N) operations like mapping or filtering an array (e.g., `companies.filter`) are not wrapped in `useMemo`, the app experiences severe UI lag when hovering or moving the mouse, because the list is recalculated on every single pixel movement.
+**Action:** Always wrap O(N) array transformations (like reducing and filtering) inside `useMemo` in the frontend, particularly when dealing with lists of contacts or companies that are part of components listening to high-frequency state updates.

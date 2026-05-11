@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { G, SOURCE_BADGE } from "../lib/design";
@@ -145,13 +145,13 @@ export default function CompaniesPage() {
     queryFn: () => api.get("/contacts?limit=100").then((r) => r.data),
   });
 
-  const companies = contactsToCompanies(contacts);
-  const filtered = search
+  const companies = useMemo(() => contactsToCompanies(contacts), [contacts]);
+  const filtered = useMemo(() => search
     ? companies.filter((c) =>
         c.name.toLowerCase().includes(search.toLowerCase()) ||
         (c.industry ?? "").toLowerCase().includes(search.toLowerCase())
       )
-    : companies;
+    : companies, [companies, search]);
 
   const hoveredCompany = companies.find((c) => c.name === hoveredName);
 

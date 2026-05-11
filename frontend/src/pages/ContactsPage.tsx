@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LeadSearchPanel } from "../components/LeadSearchPanel";
 import { api } from "../lib/api";
@@ -153,12 +153,12 @@ export default function ContactsPage() {
     previewMutation.mutate(file);
   }
 
-  const filtered = search
+  const filtered = useMemo(() => search
     ? contacts.filter((c) =>
         (c.full_name ?? "").toLowerCase().includes(search.toLowerCase()) ||
         (c.company_name ?? "").toLowerCase().includes(search.toLowerCase())
       )
-    : contacts;
+    : contacts, [contacts, search]);
 
   const isError = importStatus?.startsWith("Error");
 
