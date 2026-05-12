@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { G, SOURCE_BADGE } from "../lib/design";
@@ -145,15 +145,21 @@ export default function CompaniesPage() {
     queryFn: () => api.get("/contacts?limit=100").then((r) => r.data),
   });
 
-  const companies = contactsToCompanies(contacts);
-  const filtered = search
-    ? companies.filter((c) =>
-        c.name.toLowerCase().includes(search.toLowerCase()) ||
-        (c.industry ?? "").toLowerCase().includes(search.toLowerCase())
-      )
-    : companies;
+  // Memoize company transformation to prevent recalculation on every render
+  // This is especially important because of the onMouseMove state updates tracking high-frequency events
+  const companies = useMemo(() => contactsToCompanies(contacts), [contacts]);
 
-  const hoveredCompany = companies.find((c) => c.name === hoveredName);
+  // Memoize filtered array to avoid O(N) filtering on every hover event
+  const filtered = useMemo(() => {
+    return search
+      ? companies.filter((c) =>
+          c.name.toLowerCase().includes(search.toLowerCase()) ||
+          (c.industry ?? "").toLowerCase().includes(search.toLowerCase())
+        )
+      : companies;
+  }, [companies, search]);
+
+  const hoveredCompany = useMemo(() => companies.find((c) => c.name === hoveredName), [companies, hoveredName]);
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>

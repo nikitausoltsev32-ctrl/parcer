@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { api } from "../lib/api";
 import { getToken } from "../lib/auth";
 import { streamSSE } from "../lib/sse";
@@ -202,7 +202,11 @@ function LeadResultsCard({ companies, onSaveRequest }: { companies: Company[]; o
     });
   }
 
-  const sources = [...new Set(companies.map((c) => c.source).filter(Boolean))] as string[];
+  // Memoize sources array to avoid O(N) mapping and filtering on every render
+  // (e.g. when selectedIds state changes from toggling checkboxes)
+  const sources = useMemo(() => {
+    return [...new Set(companies.map((c) => c.source).filter(Boolean))] as string[];
+  }, [companies]);
 
   return (
     <div style={{
