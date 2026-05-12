@@ -1,0 +1,3 @@
+## 2024-05-24 - React Re-render Lag from High-Frequency Events
+**Learning:** The frontend React application tracks high-frequency events (like hover coordinates via `onMouseMove`) directly in component state. This triggers full component re-renders for every pixel of mouse movement. Unmemoized O(N) array transformations (like filtering, reducing, or mapping large contact lists) located directly within the render path are repeatedly executed on these high-frequency events, causing severe UI lag.
+**Action:** Always wrap O(N) array operations (like `filter`, `reduce`, `map`) inside `useMemo` when working on components, particularly when the components handle high-frequency events.
