@@ -1,0 +1,4 @@
+## 2024-05-12 - Fix Insecure Default SSL Verification for Database Connection
+**Vulnerability:** Database connections disabled SSL certificate validation and hostname checking by default (`ssl.CERT_NONE` and `check_hostname = False` hardcoded without condition), enabling potential man-in-the-middle (MitM) attacks.
+**Learning:** Hardcoding insecure SSL defaults in core configuration files disables vital network protections for sensitive database traffic. This codebase incorrectly initialized the SQLAlchemy `connect_args` SSL context to bypass validation entirely.
+**Prevention:** Always require secure SSL defaults (certificate validation and hostname verification). In Python `ssl.create_default_context()` provides secure defaults, and any exceptions should be strictly opt-in via configuration flags (like `database_ssl_verify: bool = True`).
