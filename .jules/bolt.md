@@ -1,0 +1,3 @@
+## 2026-05-13 - Memoizing O(N) array transformations with high-frequency state updates
+**Learning:** In React, updating high-frequency component state (like hover coordinates `hoverPos` via `onMouseMove`) triggers a full component re-render on every state change. If O(N) array transformations (such as mapping, reducing, filtering with `.toLowerCase()`) are placed directly in the component body, they execute sequentially on every render, causing severe UI lag (even freezing the UI on simple mouse movements).
+**Action:** Always extract static or search-dependent O(N) array transformations inside `useMemo` and depend strictly on the necessary variables to avoid unnecessary work during high-frequency re-renders.

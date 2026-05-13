@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { G } from "../lib/design";
@@ -30,9 +30,11 @@ export default function TemplatesPage() {
     queryFn: () => api.get("/templates").then((r) => r.data),
   });
 
-  const filtered = search
-    ? templates.filter((t) => (t.name ?? "").toLowerCase().includes(search.toLowerCase()))
-    : templates;
+  const filtered = useMemo(() => {
+    if (!search) return templates;
+    const searchLower = search.toLowerCase();
+    return templates.filter((t) => (t.name ?? "").toLowerCase().includes(searchLower));
+  }, [templates, search]);
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
