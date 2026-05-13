@@ -881,6 +881,7 @@ export default function ChatPage() {
           </div>
           <button
             onClick={addTab}
+            aria-label="Add new chat tab"
             style={{
               width: "44px", flexShrink: 0,
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -952,6 +953,7 @@ export default function ChatPage() {
                     onClick={() => fileInputRef.current?.click()}
                     disabled={loading}
                     title="Import contacts"
+                    aria-label="Import contacts"
                     style={{
                       width: "32px", height: "32px", borderRadius: "9px",
                       border: G.border, background: "rgba(255,255,255,0.50)",
@@ -1137,6 +1139,7 @@ export default function ChatPage() {
                   onClick={() => fileInputRef.current?.click()}
                   disabled={loading}
                   title="Import contacts"
+                  aria-label="Import contacts"
                   style={{
                     width: "28px", height: "28px", borderRadius: "8px",
                     border: G.borderSubtle, background: "rgba(255,255,255,0.40)",
