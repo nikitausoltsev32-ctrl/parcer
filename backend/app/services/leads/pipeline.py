@@ -25,6 +25,7 @@ from app.services.credits import AI_CREDIT_COSTS, InsufficientCreditsError, chec
 from app.services.leads.cache import domain_content_hash, get_cached_lead
 from app.services.leads.crawler import crawl_website
 from app.services.leads.deep_ai import run_deep_ai
+from app.services.leads.dedup import deduplicate_candidates
 from app.services.leads.extraction import extract_public_contacts, normalize_domain, normalize_website
 from app.services.leads.html_extraction import extract_from_html
 from app.services.leads.light_ai import run_light_ai
@@ -729,6 +730,7 @@ async def run_lead_search(
         raw["website"] = website
         raw["domain"] = domain
         deduped.append(raw)
+    deduped = deduplicate_candidates(deduped)
 
     # Create list
     fallback_name = f"Поиск {datetime.now(UTC).date().isoformat()}"

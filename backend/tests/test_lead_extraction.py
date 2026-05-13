@@ -1,6 +1,9 @@
 from app.services.leads.extraction import (
+    extract_all_emails,
+    extract_inn,
     extract_public_contacts,
     normalize_domain,
+    normalize_phone_e164,
     normalize_website,
 )
 from app.services.leads.html_extraction import extract_from_html
@@ -126,3 +129,37 @@ def test_extract_from_html_prioritizes_about_section_for_business_summary():
 
     assert result["about_text"].startswith("О компании Prom Tech designs and maintains industrial automation")
     assert result["business_summary"] == result["about_text"]
+
+def test_normalize_phone_e164_converts_russian_8_prefix():
+    assert normalize_phone_e164("8 (999) 123-45-67") == "+79991234567"
+
+
+def test_normalize_phone_e164_keeps_plus_7_number():
+    assert normalize_phone_e164("+7 999 123-45-67") == "+79991234567"
+
+
+def test_normalize_phone_e164_rejects_short_number():
+    assert normalize_phone_e164("123-45-67") is None
+
+
+def test_normalize_phone_e164_returns_none_for_empty_value():
+    assert normalize_phone_e164(None) is None
+
+
+def test_extract_inn_returns_number_with_context():
+    assert extract_inn("Реквизиты: ИНН 7707083893, КПП 770701001") == "7707083893"
+
+
+def test_extract_inn_ignores_number_without_context():
+    assert extract_inn("Код заявки 7707083893 создан автоматически") is None
+
+
+def test_extract_inn_returns_none_for_empty_value():
+    assert extract_inn(None) is None
+
+
+def test_extract_all_emails_returns_unique_lowercase_emails():
+    assert extract_all_emails("Sales@Example.ru, sales@example.ru; info@example.ru") == [
+        "sales@example.ru",
+        "info@example.ru",
+    ]
