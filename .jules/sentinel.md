@@ -7,3 +7,8 @@
 **Vulnerability:** Database connections disabled SSL certificate validation and hostname checking by default (`ssl.CERT_NONE` and `check_hostname = False` hardcoded without condition), enabling potential man-in-the-middle (MitM) attacks.
 **Learning:** Hardcoding insecure SSL defaults in core configuration files disables vital network protections for sensitive database traffic. This codebase incorrectly initialized the SQLAlchemy `connect_args` SSL context to bypass validation entirely.
 **Prevention:** Always require secure SSL defaults (certificate validation and hostname verification). In Python `ssl.create_default_context()` provides secure defaults, and any exceptions should be strictly opt-in via configuration flags (like `database_ssl_verify: bool = True`).
+
+## 2024-05-10 - Secure Refresh Token Cookies
+**Vulnerability:** Refresh tokens were being set as cookies with `secure=False` indiscriminately, meaning they could be intercepted over unencrypted HTTP connections in production.
+**Learning:** Hardcoding `secure=False` for local development convenience leads to vulnerabilities when deployed. The application needs a reliable way to differentiate environments for security settings.
+**Prevention:** Always use environment-aware configurations for security-sensitive flags. Cookies containing authentication tokens should dynamically check `settings.app_env == "production"` to ensure `secure=True` in production while permitting HTTP for local development.
