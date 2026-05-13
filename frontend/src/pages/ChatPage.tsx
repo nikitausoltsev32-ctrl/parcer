@@ -1060,7 +1060,7 @@ export default function ChatPage() {
                     <div style={{ width: "100%", marginBottom: "12px" }}>
                       <LeadResultsCard
                         companies={msg.companies}
-                        onSaveRequest={() => setInput("Сохрани найденные компании в новый список контактов. Название списка: Найденные компании.")}
+                        onSaveRequest={() => sendMessage("Сохрани найденные компании в новый список контактов.")}
                       />
                     </div>
                   )}

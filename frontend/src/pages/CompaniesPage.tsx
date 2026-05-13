@@ -16,6 +16,8 @@ interface Contact {
   industry: string | null;
   enrichment_status: string | null;
   enrichment_summary: string | null;
+  lead_score: number | null;
+  confidence: string | null;
 }
 
 interface Company {
@@ -28,6 +30,7 @@ interface Company {
   phone: string | null;
   summary: string | null;
   confidence: string;
+  lead_score: number | null;
 }
 
 function SourceBadge({ source }: { source: string | null }) {
@@ -115,6 +118,7 @@ function contactsToCompanies(contacts: Contact[]): Company[] {
         phone: c.phone ?? null,
         summary: c.enrichment_summary ?? null,
         confidence: c.enrichment_status === "done" ? "verified" : c.enrichment_status === "failed" ? "failed" : c.email ? "inferred" : "missing",
+        lead_score: c.lead_score ?? null,
       });
     }
   }
@@ -233,7 +237,7 @@ export default function CompaniesPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {["Компания", "Сайт", "Город", "Отрасль", "Email", "Источник", "Статус"].map((col) => (
+                  {["Компания", "Сайт", "Город", "Отрасль", "Email", "Score", "Источник", "Статус"].map((col) => (
                     <th key={col} style={thS}>{col}</th>
                   ))}
                 </tr>
@@ -262,6 +266,11 @@ export default function CompaniesPage() {
                     <td style={tdS}>
                       {c.email
                         ? <span style={{ color: G.navyLight }}>{c.email}</span>
+                        : <span style={{ color: G.textMuted }}>—</span>}
+                    </td>
+                    <td style={{ ...tdS, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                      {c.lead_score !== null
+                        ? <span style={{ color: c.lead_score >= 75 ? G.green : c.lead_score >= 50 ? "#d97706" : G.textMuted }}>{c.lead_score}</span>
                         : <span style={{ color: G.textMuted }}>—</span>}
                     </td>
                     <td style={tdS}><SourceBadge source={c.source} /></td>
