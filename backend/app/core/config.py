@@ -26,20 +26,21 @@ class Settings(BaseSettings):
     supabase_storage_bucket: str = "parcer-dev"
 
     # LLM providers
-    llm_chat_provider: str = "groq"
-    llm_chat_model: str = "llama-3.3-70b-versatile"
-    llm_letters_provider: str = "qwen"
-    llm_letters_model: str = "qwen2.5-72b-instruct"
-    llm_classify_provider: str = "groq"
-    llm_classify_model: str = "llama-3.1-8b-instant"
-    # Enrichment: disabled | qwen | groq | glm | claude
-    llm_enrich_provider: str = "disabled"
-    llm_enrich_model: str = "qwen2.5-72b-instruct"
+    llm_chat_provider: str = "nvidia"
+    llm_chat_model: str = "z-ai/glm-5.1"
+    llm_letters_provider: str = "nvidia"
+    llm_letters_model: str = "z-ai/glm-5.1"
+    llm_classify_provider: str = "nvidia"
+    llm_classify_model: str = "z-ai/glm-5.1"
+    # Enrichment: disabled | qwen | groq | glm | nvidia | claude
+    llm_enrich_provider: str = "nvidia"
+    llm_enrich_model: str = "z-ai/glm-5.1"
     llm_consent_required: bool = True
 
     groq_api_key: str = ""
     qwen_api_key: str = ""
     glm_api_key: str = ""
+    nvidia_api_key: str = ""
     anthropic_api_key: str = ""
     openrouter_api_key: str = ""
 

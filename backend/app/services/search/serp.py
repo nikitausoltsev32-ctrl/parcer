@@ -1,3 +1,5 @@
+from urllib.parse import unquote, urlsplit
+
 import httpx
 
 from app.core.config import settings
@@ -12,7 +14,31 @@ _AGGREGATOR_DOMAINS = {
     "google.com", "maps.google.com",
 }
 
-_AGGREGATOR_WORDS = {"рейтинг", "топ", "лучшие", "лучших", "обзор", "каталог", "список"}
+_AGGREGATOR_WORDS = {
+    "рейтинг", "топ", "лучшие", "лучших", "обзор", "каталог", "список",
+    "подборка", "сравнение", "отзывы", "как выбрать", "статья",
+    "rating", "top", "best", "review", "reviews", "directory", "catalog", "list",
+    "guide", "article", "comparison",
+}
+
+_BLOCKED_ORGANIC_PATH_PARTS = (
+    "/blog",
+    "/news",
+    "/novosti",
+    "/article",
+    "/articles",
+    "/stati",
+    "/statya",
+    "/journal",
+    "/media",
+    "/rating",
+    "/ratings",
+    "/reviews",
+    "/review",
+    "/top",
+    "/guide",
+    "/how-to",
+)
 
 
 def _domain_from_url(url: str | None) -> str:
@@ -20,6 +46,24 @@ def _domain_from_url(url: str | None) -> str:
         return ""
     url = url.removeprefix("https://").removeprefix("http://").removeprefix("www.")
     return url.split("/")[0].lower()
+
+
+def _summary_from_item(item: dict) -> str | None:
+    for key in ("description", "snippet"):
+        value = item.get(key)
+        if isinstance(value, str) and value.strip():
+            return " ".join(value.split())
+    return None
+
+
+def _is_blocked_organic_result(link: str, title: str, snippet: str | None) -> bool:
+    parsed = urlsplit(link)
+    path = unquote(parsed.path or "").lower()
+    if any(part in path for part in _BLOCKED_ORGANIC_PATH_PARTS):
+        return True
+
+    text = " ".join(part for part in [title, snippet or ""] if part).lower()
+    return any(word in text for word in _AGGREGATOR_WORDS)
 
 
 async def search_serp(query: str, city: str | None = None, limit: int = 20) -> list[dict]:
@@ -41,11 +85,11 @@ async def search_serp(query: str, city: str | None = None, limit: int = 20) -> l
         data = resp.json()
 
     results = []
-    for item in data.get("local_results", [])[:limit]:
+    for i, item in enumerate(data.get("local_results", [])[:limit]):
         phone = None
         if isinstance(item.get("phone"), str):
             phone = item["phone"]
-        results.append({
+        result = {
             "name": item.get("title", ""),
             "website": item.get("website"),
             "email": None,
@@ -54,7 +98,14 @@ async def search_serp(query: str, city: str | None = None, limit: int = 20) -> l
             "industry": item.get("type"),
             "address": item.get("address"),
             "source": "serp_maps",
-        })
+            "maps_rating": item.get("rating"),
+            "maps_reviews_count": item.get("reviews"),
+            "serp_position": item.get("position", i + 1),
+        }
+        summary = _summary_from_item(item)
+        if summary:
+            result["website_summary"] = summary
+        results.append(result)
 
     return results
 
@@ -85,7 +136,7 @@ async def search_google(query: str, city: str | None = None, limit: int = 20) ->
     # knowledge_graph — карточка конкретной компании
     kg = data.get("knowledge_graph", {})
     if kg.get("title") and (kg.get("phone") or kg.get("website")):
-        results.append({
+        result = {
             "name": kg.get("title", ""),
             "website": kg.get("website"),
             "email": None,
@@ -94,11 +145,15 @@ async def search_google(query: str, city: str | None = None, limit: int = 20) ->
             "industry": kg.get("type"),
             "address": kg.get("address"),
             "source": "serp_google",
-        })
+        }
+        summary = _summary_from_item(kg)
+        if summary:
+            result["website_summary"] = summary
+        results.append(result)
 
     # local_results — встроенный локальный блок (обычно 3 компании)
-    for item in data.get("local_results", {}).get("places", [])[:limit]:
-        results.append({
+    for i, item in enumerate(data.get("local_results", {}).get("places", [])[:limit]):
+        result = {
             "name": item.get("title", ""),
             "website": item.get("links", {}).get("website"),
             "email": None,
@@ -107,18 +162,26 @@ async def search_google(query: str, city: str | None = None, limit: int = 20) ->
             "industry": item.get("type"),
             "address": item.get("address"),
             "source": "serp_google",
-        })
+            "maps_rating": item.get("rating"),
+            "maps_reviews_count": item.get("reviews"),
+            "serp_position": item.get("position", i + 1),
+        }
+        summary = _summary_from_item(item)
+        if summary:
+            result["website_summary"] = summary
+        results.append(result)
 
     # organic_results — только реальные сайты компаний
     for item in data.get("organic_results", [])[:limit]:
         link = item.get("link", "")
         title = item.get("title", "")
+        snippet = item.get("snippet", "")
         domain = _domain_from_url(link)
         if domain in _AGGREGATOR_DOMAINS:
             continue
-        if any(w in title.lower() for w in _AGGREGATOR_WORDS):
+        if _is_blocked_organic_result(link, title, snippet):
             continue
-        results.append({
+        result = {
             "name": title,
             "website": link if link.startswith("http") else None,
             "email": None,
@@ -127,6 +190,10 @@ async def search_google(query: str, city: str | None = None, limit: int = 20) ->
             "industry": None,
             "address": None,
             "source": "serp_google",
-        })
+        }
+        summary = _summary_from_item(item)
+        if summary:
+            result["website_summary"] = summary
+        results.append(result)
 
     return results[:limit]

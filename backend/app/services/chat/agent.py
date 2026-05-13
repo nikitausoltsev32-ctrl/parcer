@@ -196,14 +196,6 @@ async def stream_agent(
         yield sse("done", {})
         return
 
-    try:
-        client = get_llm_client("chat", model_override=model)
-    except Exception:
-        logger.exception("chat: failed to initialize llm client")
-        yield sse("error", {"message": "Не удалось подключить модель. Проверьте настройки LLM и попробуйте снова."})
-        yield sse("done", {})
-        return
-
     fallback_args = _forced_search_args(user_text)
     if fallback_args:
         tool_call_id = f"forced-{uuid.uuid4()}"
@@ -217,6 +209,7 @@ async def stream_agent(
         handler_args = dict(fallback_args)
         handler_args["__db"] = db
         handler_args["__user"] = user
+        handler_args["__ai_model"] = model
         tool_result = await HANDLERS["search_companies"](handler_args)
         yield sse("tool_result", {"name": "search_companies", "result": tool_result})
 
@@ -233,22 +226,13 @@ async def stream_agent(
         yield sse("done", {})
         return
 
-        # Догружаем в LLM-историю чтобы модель описала результаты
-        messages.append(LLMMessage(
-            role="assistant",
-            content=None,
-            tool_calls=[{
-                "id": tool_call_id, "type": "function",
-                "function": {"name": "search_companies", "arguments": json.dumps(fallback_args, ensure_ascii=False)},
-            }],
-        ))
-        messages.append(LLMMessage(
-            role="tool",
-            content=json.dumps(tool_result, ensure_ascii=False),
-            tool_call_id=tool_call_id,
-            name="search_companies",
-        ))
-        # Дальше провалится в общий tool-loop, который сделает text-ответ
+    try:
+        client = get_llm_client("chat", model_override=model)
+    except Exception:
+        logger.exception("chat: failed to initialize llm client")
+        yield sse("error", {"message": "Не удалось подключить модель. Проверьте настройки LLM и попробуйте снова."})
+        yield sse("done", {})
+        return
 
     # Tool-calling loop (до 5 итераций)
     for _ in range(5):
@@ -278,10 +262,12 @@ async def stream_agent(
                 # Передаём db и user в handlers через аргументы
                 args["__db"] = db
                 args["__user"] = user
+                args["__ai_model"] = model
                 tool_result = await handler(args) if handler else {"error": "unknown_tool"}
                 # Убираем служебные ключи перед отправкой клиенту
                 args.pop("__db", None)
                 args.pop("__user", None)
+                args.pop("__ai_model", None)
                 tool_results.append({"id": tc["id"], "name": tc["name"], "result": tool_result})
                 yield sse("tool_result", {"name": tc["name"], "result": tool_result})
 

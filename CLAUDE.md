@@ -94,7 +94,7 @@ make dev
 
 **Backend:** Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 async, Procrastinate
 **Frontend:** React 18 + Vite + TypeScript + Tailwind + shadcn/ui + TanStack Query + SSE
-**LLM:** Groq (chat, dev), GLM (routing), Qwen (letters), Claude (deep AI, prod)
+**LLM:** GLM-5.1 через NVIDIA API (chat, classify, enrich, letters), Claude (deep AI, prod)
 
 ```
 backend/
@@ -103,7 +103,7 @@ backend/
     core/         # config, database, security, tokens, fernet, tracking
     services/     # вся бизнес-логика
       auth_service.py
-      llm/        # base, factory, groq, qwen, glm, claude, minimax
+      llm/        # base, factory, groq, qwen, glm, nvidia, claude
       chat/       # agent.py, tools.py
       crm/        # companies_service, contacts_service, contact_import
       inbox/      # classifier
@@ -144,7 +144,7 @@ optional outreach и observability. URL classifier существует отде
 User Input: "Найди стоматологии в Екб со слабым сайтом"
       ↓
 STEP 1 — Query Generator
-  Модель: Haiku 4.5 / GPT-5.4 Mini (dev: Groq Llama 8B)
+  Модель: GLM-5.1 через NVIDIA API
   Вход: 1 запрос → Выход: 5–15 поисковых вариантов + negative keywords
       ↓
 STEP 2 — Search Module
@@ -160,7 +160,7 @@ STEP 3 — URL Filter (детерминированный, без LLM)
   Выход: ~80–100 URL
       ↓
 STEP 4 — URL Classifier (LLM, только border cases)
-  Модель: Haiku 4.5 (dev: GLM-4.7-Flash / Groq 8B)
+  Модель: GLM-5.1 через NVIDIA API
   Запускать только если детерминированный слой не уверен
   Выход: company_homepage | contacts | services | garbage
       ↓
@@ -180,11 +180,11 @@ STEP 6 — Crawler
 STEP 7 — Basic HTML Extraction (детерминированный, без LLM)
   Извлекать: email, phone, title, h1–h3, meta description, schema.org,
              address, social_links (vk, telegram, whatsapp), has_contact_form,
-             visible_text_snippet (первые 2000 символов)
+             about_text (блок "О нас/О компании"), visible_text_snippet (первые 2000 символов)
       ↓
 STEP 8 — Light AI (1 credit, если тариф позволяет)
-  Модель: GLM-4.7-Flash / Haiku 4.5 (Free: Gemini Flash / Groq 8B)
-  Выход: { industry, city, is_commercial, is_relevant_to_icp,
+  Модель: GLM-5.1 через NVIDIA API
+  Выход: { industry, city, description, is_commercial, is_relevant_to_icp,
             relevance_score 0–100, pass_to_deep_ai }
   pass_to_deep_ai = true только если relevance_score >= 60 AND is_commercial = true
       ↓ (только лиды с pass_to_deep_ai=true)
@@ -346,21 +346,23 @@ AI_CREDIT_COSTS = {
 
 ### Dev/MVP (текущий статус)
 ```
-LLM_CHAT_PROVIDER=groq / minimax (через OpenRouter)
-LLM_CHAT_MODEL=llama-3.3-70b-versatile / minimax-m2.5:free
-LLM_LETTERS_PROVIDER=qwen
-LLM_LETTERS_MODEL=qwen2.5-72b-instruct
-LLM_CLASSIFY_PROVIDER=groq
-LLM_CLASSIFY_MODEL=llama-3.1-8b-instant
+LLM_CHAT_PROVIDER=nvidia
+LLM_CHAT_MODEL=z-ai/glm-5.1
+LLM_LETTERS_PROVIDER=nvidia
+LLM_LETTERS_MODEL=z-ai/glm-5.1
+LLM_CLASSIFY_PROVIDER=nvidia
+LLM_CLASSIFY_MODEL=z-ai/glm-5.1
+LLM_ENRICH_PROVIDER=nvidia
+LLM_ENRICH_MODEL=z-ai/glm-5.1
 ```
 
 **Правило:** free tiers Groq/Gemini/GLM — только для Free-тарифа и MVP. Для платных тарифов — только платные API.
 
 ### Endpoints провайдеров
+- NVIDIA GLM: `https://integrate.api.nvidia.com/v1`
+- GLM direct: `https://open.bigmodel.cn/api/paas/v4`
 - Groq: `https://api.groq.com/openai/v1`
 - Qwen: `https://dashscope.aliyuncs.com/compatible-mode/v1`
-- GLM: `https://open.bigmodel.cn/api/paas/v4`
-- OpenRouter: `https://openrouter.ai/api/v1`
 
 ---
 
@@ -384,13 +386,14 @@ LLM_CLASSIFY_MODEL=llama-3.1-8b-instant
 Ты классификатор B2B-лидов. Отвечай только JSON.
 
 Title: {title} | Description: {meta_description} | H1: {h1}
-Текст: {visible_text_snippet}
+About section: {about_text}
+Text: {visible_text_snippet}
 Контакты: email={email}, phone={phone}
 ICP: {icp_description} | Город: {city}
 
 Задача: стоит ли лид глубокого анализа?
 
-{"industry":"...","city":"...","is_commercial":true|false,"is_relevant_to_icp":true|false,"relevance_score":0-100,"pass_to_deep_ai":true|false}
+{"industry":"...","city":"...","description":null,"is_commercial":true|false,"is_relevant_to_icp":true|false,"relevance_score":0-100,"pass_to_deep_ai":true|false}
 
 pass_to_deep_ai=true только если relevance_score>=60 AND is_commercial=true.
 ```
@@ -657,13 +660,13 @@ Light AI обработано:         500
 | Модуль | Файл |
 |--------|------|
 | Auth (register/login/verify/reset) | `api/v1/auth.py`, `services/auth_service.py` |
-| Chat SSE + tool-calling (Groq/MiniMax) | `services/chat/agent.py`, `api/v1/chat.py` |
-| Генерация писем (Qwen) | `services/letters/generator.py` |
+| Chat SSE + tool-calling (GLM-5.1 через NVIDIA) | `services/chat/agent.py`, `api/v1/chat.py`, `services/llm/glm_nvidia.py` |
+| Генерация писем (GLM-5.1 через NVIDIA) | `services/letters/generator.py`, `services/llm/glm_nvidia.py` |
 | Отправка SMTP + Gmail OAuth | `workers/main.py:send_email`, `services/gmail.py` |
 | Tracking (pixel, click, unsub) | `api/v1/tracking.py`, `core/tracking.py` |
 | Inbox poll + AI-классификация | `workers/main.py:poll_inbox,classify_inbox_message` |
 | CSV-импорт контактов | `services/crm/contact_import.py` |
-| Lead search pipeline: Query Gen, Search, URL Filter, Cache, Crawler, HTML Extraction, Light/Deep AI, Scoring, optional Outreach, Observability | `services/leads/pipeline.py`, `services/leads/*`, `services/llm/logged.py` |
+| Lead search pipeline: Query Gen, Search, URL Filter, URL Classifier для border cases, Cache, Crawler, HTML Extraction, Light/Deep AI, Validation, Scoring, optional Outreach, Observability | `services/leads/pipeline.py`, `services/leads/*`, `services/llm/logged.py` |
 | AI Credits: баланс пользователя + атомарный check/deduct перед дорогими LLM-вызовами | `services/credits.py`, `models/user.py` |
 | Companies / Contacts / Campaigns / Templates / SMTP API | `api/v1/*.py` |
 | Periodic cleanup пустых списков | `workers/main.py:cleanup_empty_contact_lists` |
@@ -672,7 +675,6 @@ Light AI обработано:         500
 ### Заглушки / не реализовано
 | Что | Где | Приоритет |
 |-----|-----|-----------|
-| Подключить URL Classifier как Step 4 для border cases | `services/leads/url_classifier.py`, `services/leads/pipeline.py` | Высокий |
 | `run_followup` | `workers/main.py:349` | Высокий |
 | `run_reminders` | `workers/main.py:354` | Высокий |
 | Тарифные лимиты/квоты для lead pipeline вынести в config/service | частично в коде | Высокий |
@@ -716,7 +718,7 @@ Auth: `Authorization: Bearer <access>` + httpOnly refresh cookie. Ошибки: 
 | SMTP | GET/POST /smtp-accounts, PATCH/DELETE /smtp-accounts/{id}, POST /smtp-accounts/{id}/verify |
 | Templates | GET/POST /templates, PATCH/DELETE /templates/{id} |
 | Campaigns | GET/POST /campaigns, GET /campaigns/{id}, POST /campaigns/{id}/generate, GET/PATCH /campaigns/{id}/messages, POST /campaigns/{id}/send, /pause, /resume, /followup, GET /campaigns/{id}/export.csv |
-| Lead Search | POST /lead-search, GET /lead-search/logs |
+| Lead Search | POST /lead-search, GET /lead-search/{log_id} (status + leads), GET /lead-search/logs |
 | Inbox | GET /inbox, POST /inbox/{id}/reply, PATCH /inbox/{id} |
 | Suppressions | GET/POST /suppressions, DELETE /suppressions/{email} |
 | Tracking (без auth, HMAC) | GET /t/o/{id}.gif, /t/c/{id}, /t/u/{id} |

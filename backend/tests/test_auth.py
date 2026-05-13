@@ -36,6 +36,15 @@ async def test_login_wrong_password(client):
     assert r.status_code == 401
 
 
+async def test_login_with_invalid_stored_hash_returns_401(client, db_session):
+    db_session.add(User(email="legacy@test.com", password_hash="legacy-or-corrupt-hash"))
+    await db_session.commit()
+
+    r = await client.post("/api/v1/auth/login", json={"email": "legacy@test.com", "password": "password123"})
+
+    assert r.status_code == 401
+
+
 async def test_get_me_with_token(client):
     await client.post("/api/v1/auth/register", json={"email": "e@test.com", "password": "password123"})
     login = await client.post("/api/v1/auth/login", json={"email": "e@test.com", "password": "password123"})

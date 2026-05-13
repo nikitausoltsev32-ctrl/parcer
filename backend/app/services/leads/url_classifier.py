@@ -20,13 +20,25 @@ URL: {url}
 Только JSON."""
 
 
+def _loads_json_object(text: str) -> dict:
+    try:
+        return json.loads(text)
+    except Exception:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            return json.loads(text[start:end + 1])
+        raise
+
+
 async def classify_url(
     url: str,
     title: str,
     description: str,
     log: LoggedLLMCall,
+    model_override: str | None = None,
 ) -> str:
-    client = get_llm_client("classify")
+    client = get_llm_client("classify", model_override=model_override)
     prompt = _PROMPT.format(url=url, title=title[:200], description=description[:300])
     result = await logged_chat(
         client,
@@ -35,12 +47,14 @@ async def classify_url(
         log=log,
         temperature=0.1,
         max_tokens=32,
+        timeout=90.0,
+        response_format={"type": "json_object"},
     )
     text = (result.content or "").strip()
     if text.startswith("```"):
         text = text.split("```")[1].lstrip("json").strip()
     try:
-        label = json.loads(text).get("label", "garbage")
+        label = _loads_json_object(text).get("label", "garbage")
         return label if label in _LABELS else "garbage"
     except Exception:
         return "garbage"

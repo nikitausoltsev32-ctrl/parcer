@@ -45,6 +45,7 @@ async def logged_chat(
     temperature: float = 0.4,
     max_tokens: int = 1024,
     timeout: float = 30.0,
+    response_format: dict | None = None,
 ) -> LLMResult:
     call_id = str(uuid.uuid4())
     t0 = time.monotonic()
@@ -66,6 +67,7 @@ async def logged_chat(
             temperature=temperature,
             max_tokens=max_tokens,
             timeout=timeout,
+            response_format=response_format,
         )
         raw = result.raw
         if raw and hasattr(raw, "usage") and raw.usage:

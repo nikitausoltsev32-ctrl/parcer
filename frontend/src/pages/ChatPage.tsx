@@ -3,6 +3,9 @@ import { api } from "../lib/api";
 import { getToken } from "../lib/auth";
 import { streamSSE } from "../lib/sse";
 import { G, SOURCE_BADGE } from "../lib/design";
+import { LeadReportList, type LeadReportItem } from "../components/LeadReportList";
+import { LeadSearchProgress, type LeadSearchEvent, type LeadSearchProgressData } from "../components/LeadSearchProgress";
+import { Save } from "lucide-react";
 
 interface ChatModel {
   id: string;
@@ -11,8 +14,8 @@ interface ChatModel {
 }
 
 const DEFAULT_MODELS: ChatModel[] = [
-  { id: "groq/llama-3.3-70b-versatile", label: "Llama 3.3", sub: "Groq" },
-  { id: "openrouter/minimax/minimax-m2.5:free", label: "MiniMax M2", sub: "OpenRouter" },
+  { id: "nvidia/z-ai/glm-5.1", label: "GLM 5.1", sub: "NVIDIA" },
+  { id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", label: "Nemotron 3 Nano Omni 30B", sub: "NVIDIA reasoning" },
 ];
 
 interface ToolStep {
@@ -22,20 +25,9 @@ interface ToolStep {
   warning?: boolean;
 }
 
-interface Company {
+interface Company extends LeadReportItem {
   id: number | string;
   name: string;
-  website?: string;
-  summary?: string | null;
-  website_summary?: string | null;
-  description?: string | null;
-  city?: string;
-  address?: string | null;
-  industry?: string;
-  source?: string;
-  email?: string | null;
-  phone?: string | null;
-  confidence?: string;
 }
 
 interface ImportToolResult {
@@ -56,12 +48,23 @@ interface ImportToolResult {
   message?: string;
 }
 
+interface LeadSearchJob {
+  logId: string;
+  status: "pending" | "success" | "partial" | "failed";
+  saved?: number;
+  listName?: string | null;
+  error?: string | null;
+  progress?: LeadSearchProgressData | null;
+  events?: LeadSearchEvent[];
+}
+
 interface Msg {
   id: string;
   role: "user" | "assistant";
   content: string;
   toolSteps: ToolStep[];
   companies?: Company[];
+  leadSearch?: LeadSearchJob;
   importResult?: ImportToolResult;
   pending?: boolean;
 }
@@ -85,96 +88,6 @@ function SourceBadge({ source }: { source?: string }) {
       border: `1px solid ${s.border}`,
       whiteSpace: "nowrap",
     }}>{source}</span>
-  );
-}
-
-// ── Confidence badge ──────────────────────────────────────────
-function ConfidenceBadge({ state }: { state?: string }) {
-  const map: Record<string, { label: string; color: string; bg: string; border: string }> = {
-    verified: { label: "Verified", color: G.green, bg: G.greenBg, border: "rgba(45,122,95,0.25)" },
-    inferred: { label: "Inferred", color: G.amber, bg: G.amberBg, border: "rgba(176,125,42,0.25)" },
-    failed:   { label: "Failed",   color: G.red,   bg: G.redBg,   border: "rgba(192,57,43,0.25)"  },
-  };
-  const c = map[state ?? ""] ?? { label: state ?? "—", color: G.textMuted, bg: "rgba(26,37,64,0.06)", border: "rgba(26,37,64,0.12)" };
-  return (
-    <span style={{
-      fontSize: "10.5px", fontWeight: 600,
-      padding: "2px 7px", borderRadius: "20px",
-      background: c.bg, color: c.color,
-      border: `1px solid ${c.border}`,
-      whiteSpace: "nowrap",
-    }}>{c.label}</span>
-  );
-}
-
-function LeadInsightCell({ company, summary }: { company: Company; summary: string }) {
-  const signals = [
-    company.website ? "сайт" : null,
-    company.email ? "email" : null,
-    company.phone ? "телефон" : null,
-    company.industry ? company.industry : null,
-  ].filter(Boolean) as string[];
-  const hasSummary = Boolean(summary.trim());
-
-  return (
-    <div style={{
-      display: "flex",
-      flexDirection: "column",
-      gap: "7px",
-      minWidth: "280px",
-      maxWidth: "380px",
-    }}>
-      <div style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: "8px",
-      }}>
-        <div style={{
-          width: "22px",
-          height: "22px",
-          borderRadius: G.radiusXs,
-          background: hasSummary ? "rgba(43,108,176,0.10)" : "rgba(26,37,64,0.06)",
-          border: hasSummary ? "1px solid rgba(43,108,176,0.18)" : "1px solid rgba(26,37,64,0.10)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-          marginTop: "1px",
-        }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={hasSummary ? G.blue : G.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 19.5V4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 0 4 22"/>
-            <path d="M8 7h8"/><path d="M8 11h7"/><path d="M8 15h5"/>
-          </svg>
-        </div>
-        <div style={{
-          color: hasSummary ? G.textSecondary : G.textMuted,
-          lineHeight: "1.45",
-          fontSize: "12.7px",
-        }}>
-          {hasSummary ? summary : "Описание пока не найдено. Нужен сайт, сниппет или deep-анализ."}
-        </div>
-      </div>
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
-        {(signals.length ? signals : ["мало данных"]).slice(0, 4).map((signal) => (
-          <span
-            key={signal}
-            style={{
-              fontSize: "10.5px",
-              fontWeight: 650,
-              padding: "2px 7px",
-              borderRadius: "999px",
-              background: signal === "мало данных" ? "rgba(26,37,64,0.05)" : "rgba(45,122,95,0.09)",
-              color: signal === "мало данных" ? G.textMuted : G.green,
-              border: signal === "мало данных" ? "1px solid rgba(26,37,64,0.08)" : "1px solid rgba(45,122,95,0.16)",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {signal}
-          </span>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -256,24 +169,17 @@ const tdS: React.CSSProperties = {
   textOverflow: "ellipsis", maxWidth: "180px",
 };
 
+const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
 function LeadResultsCard({ companies, onSaveRequest }: { companies: Company[]; onSaveRequest: () => void }) {
-  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
-  const [hovRow, setHovRow] = useState<string | number | null>(null);
-
-  function toggle(id: string | number, e: React.MouseEvent) {
-    e.stopPropagation();
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }
-
   const sources = [...new Set(companies.map((c) => c.source).filter(Boolean))] as string[];
+  const scores = companies
+    .map((c) => (typeof c.score === "number" ? c.score : typeof c.lead_fit?.score === "number" ? c.lead_fit.score : null))
+    .filter((score): score is number => score !== null);
+  const avgScore = scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null;
+  const highScoreCount = scores.filter((score) => score >= 70).length;
+  const scoreColor = avgScore === null ? G.textMuted : avgScore >= 70 ? G.green : avgScore >= 45 ? G.amber : G.red;
+  const scoreBg = avgScore === null ? "rgba(26,37,64,0.07)" : avgScore >= 70 ? G.greenBg : avgScore >= 45 ? G.amberBg : G.redBg;
 
   return (
     <div style={{
@@ -286,147 +192,100 @@ function LeadResultsCard({ companies, onSaveRequest }: { companies: Company[]; o
       boxShadow: G.shadowCard,
       marginBottom: "4px",
     }}>
-      {/* Header */}
       <div style={{
         padding: "12px 16px",
         background: "rgba(255,255,255,0.35)",
         borderBottom: G.borderSubtle,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "12px",
+        flexWrap: "wrap",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ fontSize: "13.5px", fontWeight: 700, color: G.textPrimary }}>Найденные компании</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "13.5px", fontWeight: 700, color: G.textPrimary }}>Найденные лиды</span>
           <span style={{
-            fontSize: "11px", fontWeight: 600,
-            background: "rgba(26,37,64,0.08)", color: G.textSecondary,
-            padding: "1px 8px", borderRadius: "20px",
+            fontSize: "11px",
+            fontWeight: 600,
+            background: "rgba(26,37,64,0.08)",
+            color: G.textSecondary,
+            padding: "1px 8px",
+            borderRadius: "20px",
           }}>{companies.length}</span>
+          <span style={{
+            fontSize: "11px",
+            fontWeight: 700,
+            background: scoreBg,
+            color: scoreColor,
+            padding: "2px 8px",
+            borderRadius: "20px",
+            border: `1px solid ${avgScore === null ? "rgba(26,37,64,0.12)" : scoreColor}`,
+          }}>
+            Score {avgScore ?? "-"}
+          </span>
+          <span style={{
+            fontSize: "11px",
+            fontWeight: 600,
+            background: "rgba(26,37,64,0.06)",
+            color: G.textSecondary,
+            padding: "2px 8px",
+            borderRadius: "20px",
+          }}>
+            оценено {scores.length}/{companies.length}
+          </span>
+          {highScoreCount > 0 && (
+            <span style={{
+              fontSize: "11px",
+              fontWeight: 600,
+              background: G.greenBg,
+              color: G.green,
+              padding: "2px 8px",
+              borderRadius: "20px",
+            }}>
+              high {highScoreCount}
+            </span>
+          )}
         </div>
-        <div style={{ display: "flex", gap: "5px" }}>
+        <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
           {sources.map((s) => <SourceBadge key={s} source={s} />)}
         </div>
       </div>
 
-      {/* Table */}
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "rgba(255,255,255,0.25)" }}>
-              <th style={thS}></th>
-              <th style={thS}>Компания</th>
-              <th style={{ ...thS, minWidth: "300px" }}>Описание</th>
-              <th style={thS}>Сайт</th>
-              <th style={thS}>Город / адрес</th>
-              <th style={thS}>Телефон</th>
-              <th style={thS}>Email</th>
-              <th style={thS}>Источник</th>
-              <th style={thS}>Статус</th>
-            </tr>
-          </thead>
-          <tbody>
-            {companies.map((c) => {
-              const sel = selectedIds.has(c.id);
-              const hov = hovRow === c.id;
-              const summary = c.summary ?? c.description ?? c.website_summary ?? c.industry ?? "";
-              const location = [c.city, c.address].filter(Boolean).join(" / ");
-              return (
-                <tr
-                  key={c.id}
-                  onMouseEnter={() => setHovRow(c.id)}
-                  onMouseLeave={() => setHovRow(null)}
-                  style={{ background: sel ? "rgba(26,37,64,0.08)" : hov ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.35)", transition: "background 0.1s" }}
-                >
-                  <td style={{ ...tdS, width: "36px", paddingLeft: "14px" }}>
-                    <div
-                      onClick={(e) => toggle(c.id, e)}
-                      style={{
-                        width: "15px", height: "15px", borderRadius: "4px",
-                        border: `1.5px solid ${sel ? G.navy : "rgba(26,37,64,0.25)"}`,
-                        background: sel ? G.navy : "transparent",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        cursor: "pointer", flexShrink: 0,
-                      }}
-                    >
-                      {sel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                    </div>
-                  </td>
-                  <td style={{ ...tdS, fontWeight: 600, color: G.textPrimary }}>{c.name}</td>
-                  <td style={{
-                    ...tdS,
-                    minWidth: "300px",
-                    maxWidth: "420px",
-                    whiteSpace: "normal",
-                  }}>
-                    <LeadInsightCell company={c} summary={summary} />
-                  </td>
-                  <td style={tdS}>
-                    {c.website
-                      ? <a href="#" onClick={(e) => e.preventDefault()} style={{ color: G.navyLight, textDecoration: "none", fontSize: "12.5px" }}>{c.website}</a>
-                      : <span style={{ color: G.textMuted }}>—</span>}
-                  </td>
-                  <td style={{ ...tdS, color: location ? G.textSecondary : G.textMuted }}>{location || "—"}</td>
-                  <td style={tdS}>
-                    {c.phone
-                      ? <span style={{ color: G.textSecondary, fontSize: "12.5px" }}>{c.phone}</span>
-                      : <span style={{ color: G.textMuted }}>—</span>}
-                  </td>
-                  <td style={tdS}>
-                    {c.email
-                      ? <span style={{ color: G.navyLight, fontSize: "12.5px" }}>{c.email}</span>
-                      : <span style={{ color: G.textMuted }}>—</span>}
-                  </td>
-                  <td style={tdS}><SourceBadge source={c.source} /></td>
-                  <td style={tdS}><ConfidenceBadge state={c.confidence} /></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div style={{ padding: "12px 16px" }}>
+        <LeadReportList leads={companies} compact />
       </div>
 
-      {/* Action bar */}
       <div style={{
-        padding: "10px 16px", borderTop: G.borderSubtle,
+        padding: "10px 16px",
+        borderTop: G.borderSubtle,
         background: "rgba(255,255,255,0.30)",
-        display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        flexWrap: "wrap",
       }}>
-        {selectedIds.size > 0 && (
-          <span style={{ fontSize: "12px", color: G.textMuted, marginRight: "4px" }}>Выбрано: {selectedIds.size}</span>
-        )}
         <button
           onClick={onSaveRequest}
           style={{
-            display: "flex", alignItems: "center", gap: "6px",
-            padding: "6px 12px", borderRadius: G.radiusSm,
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "6px 12px",
+            borderRadius: G.radiusSm,
             background: G.navy,
             color: "white",
             border: "none",
-            fontSize: "12.5px", fontWeight: 600,
-            cursor: "pointer", fontFamily: "inherit",
+            fontSize: "12.5px",
+            fontWeight: 600,
+            cursor: "pointer",
+            fontFamily: "inherit",
             boxShadow: G.shadowBtn,
             transition: "all 0.15s",
           }}
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          <Save size={12} strokeWidth={2} />
           Сохранить через чат
         </button>
-        {[
-          { label: "Обогатить", icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> },
-          { label: "Создать кампанию", icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
-        ].map(({ label, icon }) => (
-          <button key={label} style={{
-            display: "flex", alignItems: "center", gap: "6px",
-            padding: "6px 12px", borderRadius: G.radiusSm,
-            background: "rgba(255,255,255,0.60)",
-            backdropFilter: "blur(8px)",
-            color: G.textSecondary, border: G.border,
-            fontSize: "12.5px", fontWeight: 500,
-            cursor: "pointer", fontFamily: "inherit",
-            transition: "background 0.12s",
-          }}
-            onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.85)"}
-            onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.60)"}
-          >{icon}{label}</button>
-        ))}
       </div>
     </div>
   );
@@ -601,6 +460,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [models, setModels] = useState<ChatModel[]>(DEFAULT_MODELS);
   const [selectedModel, setSelectedModel] = useState<ChatModel | null>(DEFAULT_MODELS[0]);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
   const bottomRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -621,11 +481,17 @@ export default function ChatPage() {
   }, [input]);
 
   useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+
+  useEffect(() => {
     let alive = true;
     api.get<ChatModel[]>("/chat/models")
       .then((res) => {
         if (!alive) return;
-        const next = Array.isArray(res.data) ? res.data : [];
+        const next = Array.isArray(res.data) && res.data.length > 0 ? res.data : DEFAULT_MODELS;
         setModels(next);
         setSelectedModel((current) => next.find((m) => m.id === current?.id) ?? next[0] ?? null);
       })
@@ -661,6 +527,129 @@ export default function ChatPage() {
     return sid;
   }
 
+  async function pollLeadSearch(logId: string, assistantId: string, tabId: number) {
+    let lastLeads: Company[] = [];
+    let lastSaved = 0;
+    let lastListName: string | null = null;
+    let lastProgress: LeadSearchProgressData | null = null;
+    let lastEvents: LeadSearchEvent[] = [];
+
+    for (let attempt = 0; attempt < 240; attempt += 1) {
+      await sleep(2500);
+      try {
+        const { data } = await api.get(`/lead-search/${logId}`);
+        const status = data.status as LeadSearchJob["status"];
+        const saved = typeof data.saved === "number" ? data.saved : 0;
+        const listName = typeof data.list_name === "string" ? data.list_name : null;
+        const progress = data.progress && typeof data.progress === "object" ? data.progress as LeadSearchProgressData : null;
+        const events = Array.isArray(data.events) ? data.events as LeadSearchEvent[] : [];
+        lastSaved = saved;
+        lastListName = listName;
+        if (progress) lastProgress = progress;
+        if (events.length > 0) lastEvents = events;
+
+        const rawLeads = Array.isArray(data.leads) ? data.leads : [];
+        if (rawLeads.length > 0) {
+          lastLeads = rawLeads.map((lead: object, index: number) => ({ id: index, ...lead })) as Company[];
+        }
+
+        if (status === "pending") {
+          updateTab(tabId, (t) => ({
+            ...t,
+            messages: t.messages.map((m) =>
+              m.id === assistantId
+                ? {
+                    ...m,
+                    pending: true,
+                    content: lastProgress?.label || (saved > 0 ? `Обрабатываю, уже сохранено ${saved}.` : "Запускаю AI-поиск."),
+                    companies: lastLeads.length > 0 ? lastLeads : m.companies,
+                    leadSearch: { logId, status, saved, listName, progress: lastProgress, events: lastEvents },
+                  }
+                : m
+            ),
+          }));
+          continue;
+        }
+
+        if (status === "success" || status === "partial") {
+          updateTab(tabId, (t) => ({
+            ...t,
+            messages: t.messages.map((m) =>
+              m.id === assistantId
+                ? {
+                    ...m,
+                    pending: false,
+                    content: saved > 0
+                      ? `${status === "partial" ? "Частично готово" : "Готово"}: сохранено ${saved} лидов${listName ? ` в "${listName}"` : ""}.`
+                      : "Готово, но подходящих компаний не найдено. Статьи и подборки отфильтрованы.",
+                    companies: lastLeads,
+                    leadSearch: { logId, status, saved, listName, progress: lastProgress, events: lastEvents },
+                  }
+                : m
+            ),
+          }));
+          return;
+        }
+
+        updateTab(tabId, (t) => ({
+          ...t,
+          messages: t.messages.map((m) =>
+            m.id === assistantId
+              ? {
+                  ...m,
+                  pending: false,
+                  content: data.failure_reason || "Поиск завершился с ошибкой.",
+                  leadSearch: { logId, status: "failed", saved, listName, error: data.failure_reason, progress: lastProgress, events: lastEvents },
+                }
+              : m
+          ),
+        }));
+        return;
+      } catch {
+        if (attempt >= 239) {
+          updateTab(tabId, (t) => ({
+            ...t,
+            messages: t.messages.map((m) =>
+              m.id === assistantId
+                ? {
+                    ...m,
+                    pending: false,
+                    content: "Не удалось получить статус AI-поиска. Попробуйте открыть результаты позже в контактах.",
+                    leadSearch: { logId, status: "failed", error: "status_poll_failed", progress: lastProgress, events: lastEvents },
+                  }
+                : m
+            ),
+          }));
+        }
+      }
+    }
+
+    // Loop ended (240 attempts ≈ 10 minutes) — show whatever we accumulated
+    updateTab(tabId, (t) => ({
+      ...t,
+      messages: t.messages.map((m) =>
+        m.id === assistantId
+          ? {
+              ...m,
+              pending: false,
+              content: lastLeads.length > 0
+                ? `Найдено ${lastSaved} компаний${lastListName ? ` в "${lastListName}"` : ""}. Поиск может продолжаться в фоне.`
+                : "Поиск занял слишком много времени. Результаты могут появиться позже в разделе Контакты.",
+              companies: lastLeads.length > 0 ? lastLeads : undefined,
+              leadSearch: {
+                logId,
+                status: lastLeads.length > 0 ? "partial" : "failed" as LeadSearchJob["status"],
+                saved: lastSaved,
+                listName: lastListName,
+                progress: lastProgress,
+                events: lastEvents,
+              },
+            }
+          : m
+      ),
+    }));
+  }
+
   async function sendMessage(textOverride?: string) {
     const text = (textOverride ?? input).trim();
     if (!text || loading || !selectedModel) return;
@@ -686,6 +675,7 @@ export default function ChatPage() {
       let accumulated = "";
       const toolSteps: ToolStep[] = [];
       let companies: Company[] | undefined;
+      let leadSearch: LeadSearchJob | undefined;
       let importResult: ImportToolResult | undefined;
 
       await streamSSE(
@@ -706,7 +696,9 @@ export default function ChatPage() {
               updateTab(currentTabId, (t) => ({
                 ...t,
                 messages: t.messages.map((m) =>
-                  m.id === assistantId ? { ...m, content: accumulated, pending: false } : m
+                  m.id === assistantId
+                    ? { ...m, content: accumulated, pending: false, ...(leadSearch ? { leadSearch } : {}) }
+                    : m
                 ),
               }));
             } else if (data.event === "tool_result") {
@@ -715,8 +707,51 @@ export default function ChatPage() {
               const label = toolName.replace(/_/g, " ");
               toolSteps.push({ id: stepId, label, done: true });
 
-              // Extract companies from the search tool contract.
               const payload = data.result as ({ companies?: unknown } | unknown[] | undefined);
+              const resultObject = data.result as Record<string, unknown> | undefined;
+              if (
+                toolName === "search_companies"
+                && resultObject
+                && resultObject.status === "pending"
+                && typeof resultObject.log_id === "string"
+              ) {
+                leadSearch = {
+                  logId: resultObject.log_id,
+                  status: "pending",
+                  progress: {
+                    stage: "queued",
+                    label: "Поиск поставлен в очередь",
+                    percent: 1,
+                    found: 0,
+                    filtered: 0,
+                    crawled: 0,
+                    saved: 0,
+                    target: typeof resultObject.limit === "number" ? resultObject.limit : 5,
+                    pages_crawled: 0,
+                    llm_calls: 0,
+                    current_domain: null,
+                  },
+                  events: [],
+                };
+                updateTab(currentTabId, (t) => ({
+                  ...t,
+                  messages: t.messages.map((m) =>
+                    m.id === assistantId
+                      ? {
+                          ...m,
+                          pending: true,
+                          content: "Поиск поставлен в очередь.",
+                          toolSteps: [...toolSteps],
+                          leadSearch,
+                        }
+                      : m
+                  ),
+                }));
+                void pollLeadSearch(resultObject.log_id, assistantId, currentTabId);
+                return;
+              }
+
+              // Extract companies from the legacy search tool contract.
               const rawCompanies = Array.isArray(payload)
                 ? payload
                 : payload && typeof payload === "object" && Array.isArray(payload.companies)
@@ -732,7 +767,7 @@ export default function ChatPage() {
               updateTab(currentTabId, (t) => ({
                 ...t,
                 messages: t.messages.map((m) =>
-                  m.id === assistantId ? { ...m, toolSteps: [...toolSteps], companies, importResult } : m
+                  m.id === assistantId ? { ...m, toolSteps: [...toolSteps], companies, leadSearch, importResult } : m
                 ),
               }));
             } else if (data.event === "error") {
@@ -860,25 +895,25 @@ export default function ChatPage() {
       )}
 
       {/* Content area */}
-      <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", alignItems: "center", padding: isEmpty ? "0" : "28px 0" }}>
+      <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", alignItems: "center", padding: isEmpty ? "0" : isMobile ? "12px 0" : "28px 0" }}>
         {isEmpty ? (
-          /* ── Empty state: ChatGPT style ── */
+          /* ── Empty state ── */
           <div style={{
             flex: 1, display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center",
-            width: "100%", padding: "0 24px",
+            width: "100%", padding: isMobile ? "0 16px" : "0 24px",
             animation: "fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) both",
           }}>
-            <div style={{ marginBottom: "20px" }}><LidaLogo size={52} /></div>
+            <div style={{ marginBottom: isMobile ? "14px" : "20px" }}><LidaLogo size={isMobile ? 40 : 52} /></div>
 
             <h1 style={{
-              fontSize: "28px", fontWeight: 700,
+              fontSize: isMobile ? "22px" : "28px", fontWeight: 700,
               color: G.textPrimary, letterSpacing: "-0.6px",
               margin: "0 0 8px", textAlign: "center",
             }}>Чем могу помочь?</h1>
             <p style={{
-              fontSize: "15px", color: G.textMuted,
-              margin: "0 0 36px", textAlign: "center", lineHeight: "1.55",
+              fontSize: isMobile ? "13.5px" : "15px", color: G.textMuted,
+              margin: isMobile ? "0 0 24px" : "0 0 36px", textAlign: "center", lineHeight: "1.55",
               maxWidth: "400px",
             }}>Лида найдёт компании, напишет письма<br />и будет вести их до ответа</p>
 
@@ -888,10 +923,10 @@ export default function ChatPage() {
               background: "rgba(255,255,255,0.72)",
               backdropFilter: G.blurHeavy, WebkitBackdropFilter: G.blurHeavy,
               border: "1px solid rgba(255,255,255,0.85)",
-              borderRadius: "20px",
+              borderRadius: isMobile ? "16px" : "20px",
               boxShadow: "0 8px 40px rgba(20,40,80,0.12), 0 2px 8px rgba(20,40,80,0.06)",
               overflow: "hidden",
-              marginBottom: "16px",
+              marginBottom: "12px",
             }}>
               <textarea
                 ref={taRef}
@@ -904,15 +939,15 @@ export default function ChatPage() {
                 style={{
                   width: "100%", border: "none", outline: "none",
                   background: "transparent", resize: "none",
-                  padding: "18px 20px 10px",
-                  fontSize: "15px", lineHeight: "1.55",
+                  padding: isMobile ? "14px 16px 8px" : "18px 20px 10px",
+                  fontSize: isMobile ? "14px" : "15px", lineHeight: "1.55",
                   color: G.textPrimary, fontFamily: "inherit",
-                  boxSizing: "border-box", minHeight: "54px",
+                  boxSizing: "border-box", minHeight: isMobile ? "46px" : "54px",
                 }}
               />
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 14px 12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "2px 10px 10px" : "4px 14px 12px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <ModelSelector models={models} value={selectedModel} onChange={setSelectedModel} />
+                  {!isMobile && <ModelSelector models={models} value={selectedModel} onChange={setSelectedModel} />}
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={loading}
@@ -933,6 +968,8 @@ export default function ChatPage() {
                 <button
                   onClick={() => sendMessage()}
                   disabled={!input.trim() || loading || !selectedModel}
+                  aria-label="Send message"
+                  title="Send message"
                   style={{
                     width: "36px", height: "36px", borderRadius: "10px",
                     background: input.trim() && !loading && selectedModel ? G.navy : "rgba(26,37,64,0.08)",
@@ -951,18 +988,20 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* Quick action chips 2×2 */}
+            {/* Quick action chips */}
             <div style={{
-              display: "grid", gridTemplateColumns: "repeat(2, 1fr)",
-              gap: "10px", width: "100%", maxWidth: "680px",
+              display: "grid",
+              gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(2, 1fr)",
+              gap: isMobile ? "8px" : "10px",
+              width: "100%", maxWidth: "680px",
             }}>
-              {QUICK_CHIPS.map((chip) => (
+              {QUICK_CHIPS.slice(0, isMobile ? 4 : 4).map((chip) => (
                 <button
                   key={chip.label}
                   onClick={() => setInput(chip.label)}
                   style={{
-                    display: "flex", alignItems: "flex-start", gap: "11px",
-                    padding: "14px 16px", borderRadius: "14px",
+                    display: "flex", alignItems: "flex-start", gap: isMobile ? "8px" : "11px",
+                    padding: isMobile ? "10px 12px" : "14px 16px", borderRadius: "14px",
                     border: "1px solid rgba(255,255,255,0.75)",
                     background: "rgba(255,255,255,0.50)",
                     backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
@@ -975,14 +1014,15 @@ export default function ChatPage() {
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.50)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 10px rgba(20,40,80,0.06)"; }}
                 >
                   <div style={{
-                    width: "32px", height: "32px", borderRadius: "9px", flexShrink: 0,
+                    width: isMobile ? "26px" : "32px", height: isMobile ? "26px" : "32px",
+                    borderRadius: "9px", flexShrink: 0,
                     background: G.navyXLight, border: G.borderDark,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     color: G.navy,
                   }}>{chip.icon}</div>
                   <div>
-                    <div style={{ fontSize: "13.5px", fontWeight: 600, color: G.textPrimary, marginBottom: "2px" }}>{chip.label}</div>
-                    <div style={{ fontSize: "12px", color: G.textMuted }}>{chip.sub}</div>
+                    <div style={{ fontSize: isMobile ? "12.5px" : "13.5px", fontWeight: 600, color: G.textPrimary, marginBottom: "2px" }}>{chip.label}</div>
+                    {!isMobile && <div style={{ fontSize: "12px", color: G.textMuted }}>{chip.sub}</div>}
                   </div>
                 </button>
               ))}
@@ -990,7 +1030,7 @@ export default function ChatPage() {
           </div>
         ) : (
           /* ── Messages ── */
-          <div style={{ width: "100%", maxWidth: "780px", padding: "0 24px" }}>
+          <div style={{ width: "100%", maxWidth: "780px", padding: isMobile ? "0 12px" : "0 24px" }}>
             {messages.map((msg) => {
               if (msg.role === "user") {
                 return (
@@ -1047,6 +1087,11 @@ export default function ChatPage() {
                       }}>
                         {msg.content || (msg.pending ? "…" : "")}
                       </div>
+                    </div>
+                  )}
+                  {msg.leadSearch?.progress && (
+                    <div style={{ maxWidth: "620px", marginTop: "10px" }}>
+                      <LeadSearchProgress progress={msg.leadSearch.progress} events={msg.leadSearch.events} />
                     </div>
                   )}
                 </div>
@@ -1121,6 +1166,8 @@ export default function ChatPage() {
               <button
                 onClick={() => sendMessage()}
                 disabled={!input.trim() || loading || !selectedModel}
+                aria-label="Send message"
+                title="Send message"
                 style={{
                   width: "34px", height: "34px", borderRadius: "9px",
                   background: input.trim() && !loading && selectedModel ? G.navy : "rgba(26,37,64,0.10)",

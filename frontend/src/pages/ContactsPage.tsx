@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LeadSearchPanel } from "../components/LeadSearchPanel";
 import { api } from "../lib/api";
@@ -92,6 +93,7 @@ function importErrorMessage(err: unknown): string {
 }
 
 export default function ContactsPage() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -153,12 +155,14 @@ export default function ContactsPage() {
     previewMutation.mutate(file);
   }
 
-  const filtered = search
-    ? contacts.filter((c) =>
-        (c.full_name ?? "").toLowerCase().includes(search.toLowerCase()) ||
-        (c.company_name ?? "").toLowerCase().includes(search.toLowerCase())
-      )
-    : contacts;
+  const filtered = useMemo(() => {
+    if (!search) return contacts;
+    const lowerSearch = search.toLowerCase();
+    return contacts.filter((c) =>
+      (c.full_name ?? "").toLowerCase().includes(lowerSearch) ||
+      (c.company_name ?? "").toLowerCase().includes(lowerSearch)
+    );
+  }, [contacts, search]);
 
   const isError = importStatus?.startsWith("Error");
 
@@ -345,6 +349,7 @@ export default function ContactsPage() {
                 {filtered.map((c) => (
                   <tr
                     key={c.id}
+                    onClick={() => navigate(`/app/contacts/${c.id}`)}
                     style={{ cursor: "pointer", transition: "background 0.1s" }}
                     onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.55)"}
                     onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.background = "transparent"}

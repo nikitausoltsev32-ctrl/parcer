@@ -10,6 +10,9 @@ def send_email(to: str, subject: str, html_body: str) -> None:
     if not settings.transactional_smtp_host:
         print(f"[EMAIL] To: {to} | Subject: {subject}\n{html_body}\n")
         return
+    if not settings.transactional_smtp_user or not settings.transactional_smtp_pass:
+        print(f"[EMAIL SKIPPED] SMTP credentials are not configured. To: {to} | Subject: {subject}\n")
+        return
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = settings.transactional_from_email
@@ -17,7 +20,12 @@ def send_email(to: str, subject: str, html_body: str) -> None:
     msg.attach(MIMEText(html_body, "html"))
     ctx = ssl.create_default_context()
     try:
-        with smtplib.SMTP_SSL(settings.transactional_smtp_host, settings.transactional_smtp_port, context=ctx) as server:
+        with smtplib.SMTP_SSL(
+            settings.transactional_smtp_host,
+            settings.transactional_smtp_port,
+            context=ctx,
+            timeout=10,
+        ) as server:
             server.login(settings.transactional_smtp_user, settings.transactional_smtp_pass)
             server.sendmail(settings.transactional_from_email, to, msg.as_string())
     except Exception as e:

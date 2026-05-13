@@ -53,6 +53,8 @@ async def generate_outreach(
         log=log,
         temperature=0.6,
         max_tokens=512,
+        timeout=120.0,
+        response_format={"type": "json_object"},
     )
     text = (result.content or "").strip()
     if text.startswith("```"):

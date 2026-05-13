@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.contact import Contact, ContactList
 from app.models.user import User
-from app.services.search import search_companies as _search
+from app.services.leads.async_search import LeadSearchQuotaExceededError, start_lead_search_job
 
 ToolHandler = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 
@@ -649,59 +649,34 @@ async def _handle_list_resources(args: dict[str, Any]) -> dict[str, Any]:
     return {"resource": resource, "items": items, "count": len(items)}
 
 
-def _truncate_summary(value: str, limit: int = 400) -> str:
-    value = " ".join(value.split()).strip()
-    if len(value) <= limit:
-        return value
-    return value[:limit].rsplit(" ", 1)[0].rstrip(".,;:") + "..."
-
-
-def _normalize_company_result(raw: dict[str, Any]) -> dict[str, Any]:
-    item = dict(raw)
-    summary = item.get("summary") or item.get("description") or item.get("website_summary")
-    if isinstance(summary, str) and summary.strip():
-        summary = _truncate_summary(summary)
-        item["summary"] = summary
-        item["website_summary"] = summary
-    else:
-        item.pop("summary", None)
-
-    if not item.get("confidence"):
-        item["confidence"] = "inferred" if item.get("name") else "failed"
-
-    return item
-
-
 async def _handle_search_companies(args: dict[str, Any]) -> dict[str, Any]:
-    args.pop("__db")
-    args.pop("__user", None)
-    results = await _search(
-        query=args.get("query", ""),
-        city=args.get("city"),
-        limit=args.get("limit", 20),
-    )
-
-    for r in results:
-        summary = r.get("website_summary")
-        if summary and isinstance(summary, str) and len(summary) > 400:
-            r["website_summary"] = summary[:400].rstrip() + "…"
-
-    # Сортировка: у кого есть email+сайт → только сайт → только email → остальные
-    results = [_normalize_company_result(r) for r in results]
-
-    def _rank(r: dict) -> int:
-        has_site = bool(r.get("website"))
-        has_email = bool(r.get("email"))
-        if has_site and has_email:
-            return 0
-        if has_site:
-            return 1
-        if has_email:
-            return 2
-        return 3
-
-    results.sort(key=_rank)
-    return {"companies": results, "total": len(results), "query": args.get("query", ""), "city": args.get("city")}
+    db: AsyncSession = args.pop("__db")
+    user: User = args.pop("__user")
+    ai_model = args.pop("__ai_model", None)
+    query = " ".join(str(args.get("query", "")).split())
+    city_value = args.get("city")
+    city = " ".join(str(city_value).split()) if city_value else None
+    limit = max(1, min(int(args.get("limit", 5) or 5), 5))
+    list_name = f"{query} {city or ''}".strip() or None
+    try:
+        log_id = await start_lead_search_job(
+            db,
+            user=user,
+            query=query,
+            city=city,
+            limit=limit,
+            list_name=list_name,
+            fast_mode=True,
+            ai_model=ai_model,
+        )
+    except LeadSearchQuotaExceededError:
+        return {
+            "error": "lead_quota_exhausted",
+            "message": "Лимит лидов исчерпан. Увеличь квоту или смени тариф.",
+            "query": query,
+            "city": city,
+        }
+    return {"status": "pending", "log_id": str(log_id), "query": query, "city": city, "limit": limit}
 
 
 async def _handle_save_companies(args: dict[str, Any]) -> dict[str, Any]:

@@ -12,6 +12,8 @@ import CampaignsPage from "./pages/CampaignsPage";
 import SettingsPage from "./pages/SettingsPage";
 import TemplatesPage from "./pages/TemplatesPage";
 import SmtpPage from "./pages/SmtpPage";
+import ContactPage from "./pages/ContactPage";
+import CompanyPage from "./pages/CompanyPage";
 
 export default function App() {
   return (
@@ -24,7 +26,9 @@ export default function App() {
       <Route path="/app" element={<AppShell />}>
         <Route index element={<ChatPage />} />
         <Route path="contacts" element={<ContactsPage />} />
+        <Route path="contacts/:id" element={<ContactPage />} />
         <Route path="companies" element={<CompaniesPage />} />
+        <Route path="companies/:name" element={<CompanyPage />} />
         <Route path="inbox" element={<InboxPage />} />
         <Route path="campaigns" element={<CampaignsPage />} />
         <Route path="templates" element={<TemplatesPage />} />

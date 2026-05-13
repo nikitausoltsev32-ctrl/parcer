@@ -18,6 +18,7 @@ frontend/.vite/
 .env
 .env.local
 .env.*.local
+.vercel/
 supabase/.temp/
 
 # Docker
@@ -30,3 +31,12 @@ Thumbs.db
 # IDE
 .idea/
 .vscode/
+
+.vercel
+
+.env 
+.env.*
+!.env.example
+
+.vercel-project-raw.json
+.vercel-services-patch.json

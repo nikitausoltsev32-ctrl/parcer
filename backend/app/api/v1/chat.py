@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.core.rate_limit import limiter, user_or_ip_key
 from app.models.chat import ChatMessage, ChatSession
 from app.models.user import User
 from app.services.chat.agent import stream_agent
@@ -27,12 +28,15 @@ class MessageRequest(BaseModel):
 
 
 @router.get("/models")
-async def list_chat_models(user: User = Depends(get_current_user)):
+@limiter.limit("30/minute", key_func=user_or_ip_key)
+async def list_chat_models(request: Request, user: User = Depends(get_current_user)):
     return get_available_chat_models()
 
 
 @router.post("/sessions", status_code=201)
+@limiter.limit("30/minute", key_func=user_or_ip_key)
 async def create_session(
+    request: Request,
     body: SessionCreate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -50,7 +54,9 @@ async def create_session(
 
 
 @router.get("/sessions")
+@limiter.limit("30/minute", key_func=user_or_ip_key)
 async def list_sessions(
+    request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -65,7 +71,9 @@ async def list_sessions(
 
 
 @router.get("/sessions/{session_id}/messages")
+@limiter.limit("30/minute", key_func=user_or_ip_key)
 async def list_messages(
+    request: Request,
     session_id: str,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -92,7 +100,9 @@ async def list_messages(
 
 
 @router.post("/sessions/{session_id}/message")
+@limiter.limit("30/minute", key_func=user_or_ip_key)
 async def post_message(
+    request: Request,
     session_id: str,
     body: MessageRequest,
     user: User = Depends(get_current_user),

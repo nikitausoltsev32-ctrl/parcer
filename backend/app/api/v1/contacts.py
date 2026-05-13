@@ -123,6 +123,41 @@ async def import_csv(
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
+@router.get("/contacts/{contact_id}")
+async def get_contact(
+    contact_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    contact = await _get_contact(contact_id, user.id, db)
+    rows = await db.execute(
+        select(ContactList.source).where(ContactList.id == contact.list_id)
+    )
+    source_row = rows.scalar_one_or_none()
+    raw = contact.raw or {}
+    enrichment = contact.enrichment or {}
+    company = raw.get("company") or (raw.get("name") if raw.get("name") != contact.contact_name else None)
+    return {
+        "id": str(contact.id),
+        "full_name": contact.contact_name or company or "-",
+        "company_name": company,
+        "status": contact.status,
+        "email": contact.email,
+        "phone": contact.phone or raw.get("phone"),
+        "source": source_row or "manual",
+        "list_id": str(contact.list_id) if contact.list_id else None,
+        "website": enrichment.get("website") or raw.get("website"),
+        "city": enrichment.get("city") or raw.get("city"),
+        "industry": raw.get("industry") or enrichment.get("industry"),
+        "enrichment_summary": enrichment.get("description") or enrichment.get("website_summary"),
+        "lead_score": enrichment.get("lead_score"),
+        "confidence": enrichment.get("confidence"),
+        "next_step": contact.next_step,
+        "next_step_at": contact.next_step_at.isoformat() if contact.next_step_at else None,
+        "created_at": contact.created_at.isoformat() if contact.created_at else None,
+    }
+
+
 @router.patch("/contacts/{contact_id}")
 async def update_contact(
     contact_id: str,

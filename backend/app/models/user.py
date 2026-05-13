@@ -18,7 +18,7 @@ class User(Base):
     business_profile: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     llm_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     plan: Mapped[str] = mapped_column(String, default="trial")
-    ai_credits_balance: Mapped[int] = mapped_column(Integer, default=0)
+    ai_credits_balance: Mapped[int] = mapped_column(Integer, default=10_000)
     leads_quota: Mapped[int] = mapped_column(Integer, default=50)
     sends_quota: Mapped[int] = mapped_column(Integer, default=50)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

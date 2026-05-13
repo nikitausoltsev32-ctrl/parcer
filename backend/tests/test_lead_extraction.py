@@ -3,6 +3,7 @@ from app.services.leads.extraction import (
     normalize_domain,
     normalize_website,
 )
+from app.services.leads.html_extraction import extract_from_html
 
 
 def test_normalize_website_adds_scheme_and_strips_tracking_path_noise():
@@ -38,3 +39,90 @@ def test_extract_public_contacts_returns_none_without_fabricating_data():
     assert result.telegram is None
     assert result.whatsapp is None
     assert result.vk is None
+
+
+def test_extract_from_html_returns_og_schema_and_business_summary():
+    html = """
+    <html>
+      <head>
+        <title>Studio One</title>
+        <meta property="og:description" content="OG summary for Studio One.">
+        <script type="application/ld+json">
+          {"@type": "LocalBusiness", "description": "Schema summary for Studio One."}
+        </script>
+      </head>
+      <body>
+        <nav>Home Contacts Blog</nav>
+        <h1>Studio One</h1>
+        <h2>B2B websites and brand systems</h2>
+        <p>Studio One builds conversion-focused websites and brand systems for B2B teams.</p>
+      </body>
+    </html>
+    """
+
+    result = extract_from_html(html, "https://studio.test")
+
+    assert result["og_description"] == "OG summary for Studio One."
+    assert result["schema_org_description"] == "Schema summary for Studio One."
+    expected_summary = "Studio One builds conversion-focused websites and brand systems for B2B teams."
+    assert result["first_text_block"] == expected_summary
+    assert result["business_summary"] == expected_summary
+
+
+def test_extract_from_html_finds_obfuscated_footer_email():
+    html = """
+    <html>
+      <body>
+        <main><h1>Studio One</h1><p>We build B2B websites.</p></main>
+        <footer>
+          <div>Contacts</div>
+          <div>Email: sales [at] studio [dot] test</div>
+          <div>Phone: +7 (343) 222-33-44</div>
+        </footer>
+      </body>
+    </html>
+    """
+
+    result = extract_from_html(html, "https://studio.test")
+
+    assert result["email"] == "sales@studio.test"
+    assert result["phone"] == "+7 (343) 222-33-44"
+    assert "sales [at] studio [dot] test" in result["footer_text"]
+
+
+def test_extract_from_html_finds_cyrillic_obfuscated_email():
+    html = """
+    <html>
+      <body>
+        <main><h1>Studio One</h1><p>We build B2B websites.</p></main>
+        <footer>Почта: sales [собака] studio [точка] test</footer>
+      </body>
+    </html>
+    """
+
+    result = extract_from_html(html, "https://studio.test")
+
+    assert result["email"] == "sales@studio.test"
+
+
+def test_extract_from_html_prioritizes_about_section_for_business_summary():
+    html = """
+    <html>
+      <body>
+        <main>
+          <h1>Prom Tech</h1>
+          <p>Short hero text for the first screen that should not be the main business summary.</p>
+          <section id="about">
+            <h2>О компании</h2>
+            <p>Prom Tech designs and maintains industrial automation systems for manufacturing plants.</p>
+            <p>The company works with production lines, dispatching, and service support.</p>
+          </section>
+        </main>
+      </body>
+    </html>
+    """
+
+    result = extract_from_html(html, "https://prom-tech.test")
+
+    assert result["about_text"].startswith("О компании Prom Tech designs and maintains industrial automation")
+    assert result["business_summary"] == result["about_text"]

@@ -16,6 +16,10 @@ _PROMPT = """\
 Контакты из парсера: email={email}, phone={phone}, telegram={telegram}
 
 Заполни JSON строго по схеме. Данные ТОЛЬКО из текста выше. Если нет — null. НЕ ВЫДУМЫВАЙ.
+lead_fit.score: 0–100. Оценивай реальную ценность лида для того, кто продаёт {service_offered}.
+  Высокий score (70+): компания коммерческая, видны проблемы/слабости, которые закрывает предложение.
+  lead_fit.reason: 1–2 предложения — конкретно почему компания интересна (или нет). Только факты с сайта.
+  lead_fit.priority: "high" если score>=70, "medium" если >=45, "low" иначе.
 Отвечай строго JSON без текста вне JSON:
 
 {{
@@ -45,6 +49,11 @@ _PROMPT = """\
   }},
   "pain_points": [],
   "reason_to_contact": null,
+  "lead_fit": {{
+    "score": 0,
+    "priority": "low",
+    "reason": null
+  }},
   "confidence": 0.5
 }}"""
 
@@ -76,7 +85,8 @@ async def run_deep_ai(
         log=log,
         temperature=0.2,
         max_tokens=1024,
-        timeout=60.0,
+        timeout=120.0,
+        response_format={"type": "json_object"},
     )
     text = (result.content or "").strip()
     if text.startswith("```"):

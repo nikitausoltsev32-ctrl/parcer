@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
-from app.services.llm.base import LLMClient, LLMMessage
+from app.services.llm.base import LLMClient, LLMMessage, LLMResult
+from app.services.llm.logged import LoggedLLMCall, logged_chat
 
 
 async def test_llm_client_disables_openai_sdk_retries(monkeypatch):
@@ -34,3 +35,28 @@ async def test_llm_client_disables_openai_sdk_retries(monkeypatch):
     await client.chat([LLMMessage(role="user", content="hello")])
 
     assert captured["max_retries"] == 0
+
+
+async def test_logged_chat_passes_response_format_to_client():
+    captured = {}
+
+    class FakeClient:
+        model = "test-model"
+
+        async def chat(self, messages, **kwargs):
+            captured["messages"] = messages
+            captured["kwargs"] = kwargs
+            return LLMResult(content='{"ok":true}', raw=None)
+
+    log = LoggedLLMCall()
+    result = await logged_chat(
+        FakeClient(),
+        [LLMMessage(role="user", content="Return JSON")],
+        stage="test",
+        log=log,
+        response_format={"type": "json_object"},
+    )
+
+    assert result.content == '{"ok":true}'
+    assert captured["kwargs"]["response_format"] == {"type": "json_object"}
+    assert log.entries[0]["success"] is True
