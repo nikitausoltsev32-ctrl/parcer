@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { G, SOURCE_BADGE } from "../lib/design";
@@ -134,10 +135,10 @@ const tdS: React.CSSProperties = {
 };
 
 export default function CompaniesPage() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [hoveredName, setHoveredName] = useState<string | null>(null);
   const [hoverPos, setHoverPos] = useState({ x: 0, y: 0 });
-  const [selectedName, setSelectedName] = useState<string | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
   const { data: contacts = [], isLoading } = useQuery<Contact[]>({
@@ -145,15 +146,20 @@ export default function CompaniesPage() {
     queryFn: () => api.get("/contacts?limit=100").then((r) => r.data),
   });
 
-  const companies = contactsToCompanies(contacts);
-  const filtered = search
-    ? companies.filter((c) =>
-        c.name.toLowerCase().includes(search.toLowerCase()) ||
-        (c.industry ?? "").toLowerCase().includes(search.toLowerCase())
-      )
-    : companies;
+  const companies = useMemo(() => contactsToCompanies(contacts), [contacts]);
+  const filtered = useMemo(() => {
+    if (!search) return companies;
+    const lowerSearch = search.toLowerCase();
+    return companies.filter((c) =>
+      c.name.toLowerCase().includes(lowerSearch) ||
+      (c.industry ?? "").toLowerCase().includes(lowerSearch)
+    );
+  }, [companies, search]);
 
-  const hoveredCompany = companies.find((c) => c.name === hoveredName);
+  const hoveredCompany = useMemo(
+    () => companies.find((c) => c.name === hoveredName),
+    [companies, hoveredName],
+  );
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
@@ -238,11 +244,10 @@ export default function CompaniesPage() {
                     key={c.name}
                     onMouseEnter={() => setHoveredName(c.name)}
                     onMouseLeave={() => setHoveredName(null)}
-                    onClick={() => setSelectedName(c.name === selectedName ? null : c.name)}
+                    onClick={() => navigate(`/app/companies/${encodeURIComponent(c.name)}`)}
                     style={{
                       cursor: "pointer",
-                      background: selectedName === c.name ? G.navyXLight :
-                        hoveredName === c.name ? "rgba(255,255,255,0.55)" : "transparent",
+                      background: hoveredName === c.name ? "rgba(255,255,255,0.55)" : "transparent",
                       transition: "background 0.1s",
                     }}
                   >

@@ -7,6 +7,7 @@ from app.models.contact import Contact, ContactList
 from app.models.contact_import_job import ContactImportJob
 from app.models.event import Event
 from app.models.inbox_message import InboxMessage
+from app.models.lead import Lead, LeadList
 from app.models.lead_processing_log import LeadProcessingLog
 from app.models.reminder import Reminder
 from app.models.smtp_account import SmtpAccount
@@ -30,6 +31,8 @@ __all__ = [
     "ChatSession",
     "ChatMessage",
     "InboxMessage",
+    "Lead",
+    "LeadList",
     "LeadProcessingLog",
     "Reminder",
     "Activity",

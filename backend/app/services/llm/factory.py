@@ -1,34 +1,34 @@
 from app.core.config import settings
 from app.services.llm.base import LLMClient
 from app.services.llm.glm import GLMClient
+from app.services.llm.glm_nvidia import GLMNvidiaClient
 from app.services.llm.groq import GroqClient
-from app.services.llm.minimax import MiniMaxClient
 from app.services.llm.qwen import QwenClient
 
 _OPENAI_PROVIDERS = {
     "groq": GroqClient,
     "qwen": QwenClient,
     "glm": GLMClient,
-    "minimax": MiniMaxClient,
-    "openrouter": MiniMaxClient,
+    "nvidia": GLMNvidiaClient,
 }
 
 CHAT_MODEL_OPTIONS = [
     {
-        "id": "groq/llama-3.3-70b-versatile",
-        "label": "Llama 3.3",
-        "sub": "Groq",
-        "provider": "groq",
-        "model": "llama-3.3-70b-versatile",
-        "api_key_setting": "groq_api_key",
+        "id": "nvidia/z-ai/glm-5.1",
+        "label": "GLM 5.1",
+        "sub": "NVIDIA",
+        "provider": "nvidia",
+        "model": "z-ai/glm-5.1",
+        "api_key_setting": "nvidia_api_key",
     },
     {
-        "id": "openrouter/minimax/minimax-m2.5:free",
-        "label": "MiniMax M2",
-        "sub": "OpenRouter",
-        "provider": "openrouter",
-        "model": "minimax/minimax-m2.5:free",
-        "api_key_setting": "openrouter_api_key",
+        "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        "label": "Nemotron 3 Nano Omni 30B",
+        "sub": "NVIDIA reasoning",
+        "provider": "nvidia",
+        "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        "api_key_setting": "nvidia_api_key",
+        "thinking": True,
     },
 ]
 
@@ -43,15 +43,25 @@ def get_available_chat_models() -> list[dict[str, str]]:
     ]
 
 
+def is_available_model_override(model_id: str | None) -> bool:
+    if not model_id:
+        return True
+    option = _CHAT_MODEL_BY_ID.get(model_id)
+    return bool(option and getattr(settings, option["api_key_setting"], ""))
+
+
 def get_llm_client(task: str, *, model_override: str | None = None) -> LLMClient:
     """task: 'chat' | 'letters' | 'classify' | 'enrich'"""
     provider = getattr(settings, f"llm_{task}_provider")
     model = getattr(settings, f"llm_{task}_model")
 
+    option = None
     if model_override:
         option = _CHAT_MODEL_BY_ID.get(model_override)
         if not option:
             raise ValueError(f"Unsupported LLM model override: {model_override}")
+        if not getattr(settings, option["api_key_setting"], ""):
+            raise ValueError(f"LLM model override is not configured: {model_override}")
         provider = option["provider"]
         model = option["model"]
 
@@ -62,4 +72,7 @@ def get_llm_client(task: str, *, model_override: str | None = None) -> LLMClient
     cls = _OPENAI_PROVIDERS.get(provider)
     if not cls:
         raise ValueError(f"Unknown LLM provider: {provider}")
-    return cls(model=model)
+    kwargs = {}
+    if provider == "nvidia" and option is not None:
+        kwargs["thinking"] = option.get("thinking")
+    return cls(model=model, **kwargs)

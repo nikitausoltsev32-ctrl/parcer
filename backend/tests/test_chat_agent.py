@@ -29,14 +29,10 @@ async def test_stream_agent_forces_search_when_model_does_not_call_tool(monkeypa
     async def fake_search(args):
         calls.append(args)
         return {
-            "companies": [
-                {
-                    "name": "Studio One",
-                    "website": "https://example.com",
-                    "website_summary": "Design studio",
-                }
-            ],
-            "total": 1,
+            "status": "pending",
+            "log_id": "11111111-1111-1111-1111-111111111111",
+            "query": args["query"],
+            "city": args["city"],
         }
 
     monkeypatch.setattr("app.services.chat.agent.get_llm_client", lambda task, **kwargs: _NoToolClient())
@@ -58,7 +54,10 @@ async def test_stream_agent_forces_search_when_model_does_not_call_tool(monkeypa
     assert calls
     assert calls[0]["query"] == "дизайн-студии"
     assert calls[0]["city"] == "Казани"
-    assert any(event["event"] == "tool_result" and event["name"] == "search_companies" for event in events)
+    tool_result = next(event for event in events if event["event"] == "tool_result")
+    assert tool_result["name"] == "search_companies"
+    assert tool_result["result"]["status"] == "pending"
+    assert "companies" not in tool_result["result"]
 
 
 async def test_stream_agent_runs_explicit_search_without_calling_llm(monkeypatch, db_session):

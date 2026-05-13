@@ -1,11 +1,12 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.core.rate_limit import limiter, user_or_ip_key
 from app.models.campaign import Campaign, CampaignMessage
 from app.models.contact import ContactList
 from app.models.smtp_account import SmtpAccount
@@ -134,7 +135,9 @@ async def generate_campaign(
 
 
 @router.post("/campaigns/{campaign_id}/send")
+@limiter.limit("5/minute", key_func=user_or_ip_key)
 async def send_campaign_route(
+    request: Request,
     campaign_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

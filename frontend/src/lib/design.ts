@@ -56,6 +56,7 @@ export const SOURCE_BADGE: Record<string, { bg: string; text: string; border: st
   'serpapi':     { bg: 'rgba(45,122,95,0.12)',   text: '#2d7a5f', border: 'rgba(45,122,95,0.25)'  },
   'SerpAPI':     { bg: 'rgba(45,122,95,0.12)',   text: '#2d7a5f', border: 'rgba(45,122,95,0.25)'  },
   'serp_maps':   { bg: 'rgba(45,122,95,0.12)',   text: '#2d7a5f', border: 'rgba(45,122,95,0.25)'  },
+  'serp_google': { bg: 'rgba(45,122,95,0.12)',   text: '#2d7a5f', border: 'rgba(45,122,95,0.25)'  },
   'serp_yandex': { bg: 'rgba(192,57,43,0.12)',   text: '#c0392b', border: 'rgba(192,57,43,0.25)'  },
   'firecrawl': { bg: 'rgba(176,125,42,0.12)',  text: '#b07d2a', border: 'rgba(176,125,42,0.25)' },
   'Firecrawl': { bg: 'rgba(176,125,42,0.12)',  text: '#b07d2a', border: 'rgba(176,125,42,0.25)' },

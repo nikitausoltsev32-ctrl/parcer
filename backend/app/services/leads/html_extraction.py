@@ -1,0 +1,385 @@
+﻿import json
+import re
+from urllib.parse import unquote, urljoin
+
+from bs4 import BeautifulSoup
+
+EMAIL_RE = re.compile(r'(?<![\w.+-])([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})(?![\w.+-])', re.IGNORECASE)
+PHONE_RE = re.compile(r'(?:(?:\+7|8)[\s\-()]*\d(?:[\s\-()]*\d){9,10})')
+ABOUT_LABEL_RE = re.compile(r'(^|\b)(about us|about|о нас|о компании)(\b|$)', re.IGNORECASE)
+ABOUT_ATTR_RE = re.compile(r'(about|o[-_]?nas|o[-_]?kompanii|company)', re.IGNORECASE)
+HEADING_TAGS = {'h1', 'h2', 'h3', 'h4'}
+
+
+def _clean_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = ' '.join(value.split())
+    return normalized or None
+
+
+def _truncate_text(value: str | None, limit: int = 1000) -> str | None:
+    if not value:
+        return None
+    if len(value) <= limit:
+        return value
+    return value[:limit].rsplit(' ', 1)[0].rstrip(',. ')
+
+
+def _first_match(pattern: re.Pattern[str], value: str) -> str | None:
+    match = pattern.search(value)
+    return _clean_text(match.group(1) if match.lastindex else match.group(0)) if match else None
+
+
+def _deobfuscate_email_text(value: str) -> str:
+    at_pattern = (
+        r'\s*(?:\[\s*at\s*\]|\(\s*at\s*\)|\{\s*at\s*\}|'
+        r'\[\s*собака\s*\]|\(\s*собака\s*\)|\{\s*собака\s*\}| at | собака )\s*'
+    )
+    dot_pattern = (
+        r'\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\)|\{\s*dot\s*\}|'
+        r'\[\s*точка\s*\]|\(\s*точка\s*\)|\{\s*точка\s*\}| dot | точка )\s*'
+    )
+    normalized = re.sub(
+        at_pattern,
+        '@',
+        value,
+        flags=re.IGNORECASE,
+    )
+    return re.sub(
+        dot_pattern,
+        '.',
+        normalized,
+        flags=re.IGNORECASE,
+    )
+
+
+def _extract_phone(value: str) -> str | None:
+    match = PHONE_RE.search(value)
+    if not match:
+        return None
+    candidate = match.group(0)
+    digits = re.sub(r'\D', '', candidate)
+    if not (digits.startswith('7') or digits.startswith('8')):
+        return None
+    if len(digits) not in (11,):
+        return None
+    return _clean_text(candidate)
+
+
+def _extract_schema_org(soup: BeautifulSoup) -> dict | None:
+    for script in soup.find_all('script', attrs={'type': re.compile(r'ld\+json', re.IGNORECASE)}):
+        raw = script.string or script.get_text() or ''
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+
+        if isinstance(parsed, dict):
+            return parsed
+        if isinstance(parsed, list):
+            for item in parsed:
+                if isinstance(item, dict):
+                    return item
+    return None
+
+
+def _extract_address(soup: BeautifulSoup, schema_org: dict | None) -> str | None:
+    if schema_org:
+        address = schema_org.get('address')
+        if isinstance(address, str):
+            cleaned = _clean_text(address)
+            if cleaned:
+                return cleaned
+        if isinstance(address, dict):
+            parts = [
+                address.get('streetAddress'),
+                address.get('addressLocality'),
+                address.get('addressRegion'),
+                address.get('postalCode'),
+                address.get('addressCountry'),
+            ]
+            joined = _clean_text(', '.join(str(part) for part in parts if part))
+            if joined:
+                return joined
+
+    address_tag = soup.find('address')
+    if address_tag:
+        return _clean_text(address_tag.get_text(' ', strip=True))
+    return None
+
+
+def _has_contact_form(soup: BeautifulSoup) -> bool:
+    for form in soup.find_all('form'):
+        action_parts = [
+            form.get('action') or '',
+            form.get('id') or '',
+            ' '.join(form.get('class', [])),
+        ]
+        action = ' '.join(action_parts).lower()
+        if any(token in action for token in ('contact', 'form', 'zayavka')):
+            return True
+
+        for input_tag in form.find_all(['input', 'textarea', 'select']):
+            field = ' '.join(
+                [
+                    input_tag.get('type') or '',
+                    input_tag.get('name') or '',
+                    input_tag.get('id') or '',
+                    input_tag.get('placeholder') or '',
+                ]
+            ).lower()
+            if any(token in field for token in ('email', 'mail', 'phone', 'tel', 'телефон')):
+                return True
+    return False
+
+
+def _extract_social_links(soup: BeautifulSoup, base_url: str) -> dict[str, str | None]:
+    links = {
+        'vk': None,
+        'telegram': None,
+        'whatsapp': None,
+        'instagram': None,
+    }
+
+    for anchor in soup.find_all('a', href=True):
+        href = (anchor.get('href') or '').strip()
+        if not href:
+            continue
+        absolute = urljoin(base_url, href)
+        lower = absolute.lower()
+
+        if links['vk'] is None and 'vk.com' in lower:
+            links['vk'] = absolute
+        if links['telegram'] is None and 't.me' in lower:
+            links['telegram'] = absolute
+        if links['whatsapp'] is None and ('wa.me' in lower or 'whatsapp.com' in lower):
+            links['whatsapp'] = absolute
+        if links['instagram'] is None and 'instagram.com' in lower:
+            links['instagram'] = absolute
+
+    return links
+
+
+def _extract_meta_description(soup: BeautifulSoup) -> str | None:
+    tag = soup.find('meta', attrs={'name': re.compile(r'^description$', re.IGNORECASE)})
+    if tag and tag.get('content'):
+        return _clean_text(tag.get('content'))
+    return None
+
+
+def _extract_footer_text(soup: BeautifulSoup) -> str | None:
+    footer_parts = []
+    for tag in soup.find_all(['footer', 'address']):
+        text = _clean_text(tag.get_text(' ', strip=True))
+        if text:
+            footer_parts.append(text)
+    if footer_parts:
+        return _clean_text(' '.join(footer_parts))
+
+    body = soup.body
+    if not body:
+        return None
+    body_blocks = [_clean_text(tag.get_text(' ', strip=True)) for tag in body.find_all(['section', 'div', 'p'])]
+    meaningful = [text for text in body_blocks if text]
+    if not meaningful:
+        return None
+    return _clean_text(' '.join(meaningful[-5:]))
+
+
+def _extract_og_description(soup: BeautifulSoup) -> str | None:
+    tag = soup.find(
+        'meta',
+        attrs={
+            'property': re.compile(r'^(og:description|twitter:description)$', re.IGNORECASE),
+        },
+    )
+    if not tag:
+        tag = soup.find(
+            'meta',
+            attrs={
+                'name': re.compile(r'^(og:description|twitter:description)$', re.IGNORECASE),
+            },
+        )
+    if tag and tag.get('content'):
+        return _clean_text(tag.get('content'))
+    return None
+
+
+def _iter_schema_dicts(value):
+    if isinstance(value, dict):
+        yield value
+        for nested in value.values():
+            yield from _iter_schema_dicts(nested)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _iter_schema_dicts(item)
+
+
+def _extract_schema_description(schema_org: dict | None) -> str | None:
+    if not schema_org:
+        return None
+    for item in _iter_schema_dicts(schema_org):
+        description = item.get('description')
+        if isinstance(description, str):
+            cleaned = _clean_text(description)
+            if cleaned:
+                return cleaned
+    return None
+
+
+def _tag_text(tag) -> str | None:
+    return _clean_text(tag.get_text(' ', strip=True)) if tag else None
+
+
+def _is_about_label(value: str | None) -> bool:
+    if not value:
+        return False
+    return bool(ABOUT_LABEL_RE.search(value) or ABOUT_ATTR_RE.search(value))
+
+
+def _is_about_candidate_text(value: str | None) -> bool:
+    if not value:
+        return False
+    if len(value) < 40:
+        return False
+    return len(value.split()) >= 6
+
+
+def _extract_about_from_heading(heading) -> str | None:
+    parts = [_tag_text(heading)]
+    for sibling in heading.find_next_siblings():
+        if sibling.name in HEADING_TAGS:
+            break
+        text = _tag_text(sibling)
+        if text:
+            parts.append(text)
+        if len(' '.join(part for part in parts if part)) >= 1000:
+            break
+
+    joined = _truncate_text(_clean_text(' '.join(part for part in parts if part)))
+    return joined if _is_about_candidate_text(joined) else None
+
+
+def _extract_about_text(soup: BeautifulSoup) -> str | None:
+    for heading in soup.find_all(list(HEADING_TAGS)):
+        if not _is_about_label(_tag_text(heading)):
+            continue
+        heading_text = _extract_about_from_heading(heading)
+        if heading_text:
+            return heading_text
+
+    for tag in soup.find_all(['section', 'article', 'div']):
+        identity = ' '.join(
+            [
+                tag.get('id') or '',
+                ' '.join(tag.get('class', [])),
+                tag.get('aria-label') or '',
+            ]
+        )
+        heading = tag.find(list(HEADING_TAGS))
+        if not (_is_about_label(identity) or _is_about_label(_tag_text(heading))):
+            continue
+        text = _truncate_text(_tag_text(tag))
+        if _is_about_candidate_text(text):
+            return text
+    return None
+
+
+def _is_meaningful_text(value: str | None) -> bool:
+    if not value:
+        return False
+    lower = value.lower()
+    if len(value) < 50:
+        return False
+    if any(token in lower for token in ('cookie', 'javascript', 'privacy policy')):
+        return False
+    words = value.split()
+    return len(words) >= 8
+
+
+def _extract_first_text_block(soup: BeautifulSoup) -> str | None:
+    for tag in soup.find_all(['p', 'article', 'section', 'main', 'div']):
+        if tag.find_parent(['nav', 'header', 'footer', 'aside']):
+            continue
+        text = _clean_text(tag.get_text(' ', strip=True))
+        if not _is_meaningful_text(text):
+            continue
+        if text and len(text) > 500:
+            text = text[:500].rsplit(' ', 1)[0].rstrip(',. ')
+        return text
+    return None
+
+
+def _headings_summary(h1: str | None, h2s: list[str]) -> str | None:
+    parts = [h1, *h2s[:2]]
+    cleaned = [_clean_text(part) for part in parts if _clean_text(part)]
+    if not cleaned:
+        return None
+    return '. '.join(cleaned)
+
+
+def extract_from_html(html: str, url: str) -> dict:
+    soup = BeautifulSoup(html or '', 'html.parser')
+    schema_org = _extract_schema_org(soup)
+
+    for tag in soup(['script', 'style', 'noscript']):
+        tag.extract()
+
+    visible_text = _clean_text(soup.get_text(' ', strip=True)) or ''
+
+    title_tag = soup.title
+    title = _clean_text(title_tag.get_text(strip=True)) if title_tag else None
+
+    h1_tag = soup.find('h1')
+    h1 = _clean_text(h1_tag.get_text(' ', strip=True)) if h1_tag else None
+    h2s = [_clean_text(tag.get_text(' ', strip=True)) for tag in soup.find_all('h2')]
+    h3s = [_clean_text(tag.get_text(' ', strip=True)) for tag in soup.find_all('h3')]
+    h2s_clean = [value for value in h2s if value]
+    meta_description = _extract_meta_description(soup)
+    og_description = _extract_og_description(soup)
+    schema_org_description = _extract_schema_description(schema_org)
+    first_text_block = _extract_first_text_block(soup)
+    about_text = _extract_about_text(soup)
+    business_summary = about_text or first_text_block or _headings_summary(h1, h2s_clean)
+    footer_text = _extract_footer_text(soup)
+
+    all_text = ' '.join(
+        part
+        for part in [
+            html or '',
+            unquote(html or ''),
+            visible_text,
+            about_text or '',
+            footer_text or '',
+        ]
+        if part
+    )
+    email_search_text = _deobfuscate_email_text(all_text)
+
+    email = _first_match(EMAIL_RE, all_text) or _first_match(EMAIL_RE, email_search_text)
+    phone = _extract_phone(all_text)
+
+    return {
+        'title': title,
+        'h1': h1,
+        'h2s': h2s_clean,
+        'h3s': [value for value in h3s if value],
+        'meta_description': meta_description,
+        'og_description': og_description,
+        'schema_org_description': schema_org_description,
+        'first_text_block': first_text_block,
+        'about_text': about_text,
+        'business_summary': business_summary,
+        'footer_text': footer_text,
+        'email': email,
+        'phone': phone,
+        'address': _extract_address(soup, schema_org),
+        'has_contact_form': _has_contact_form(soup),
+        'social_links': _extract_social_links(soup, url),
+        'schema_org': schema_org,
+        'visible_text_snippet': visible_text[:2000],
+    }

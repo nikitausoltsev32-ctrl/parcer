@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from passlib.exc import UnknownHashError
 
 from app.core.config import settings
 
@@ -16,7 +17,10 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_context.verify(plain, hashed)
+    try:
+        return _pwd_context.verify(plain, hashed)
+    except (TypeError, ValueError, UnknownHashError):
+        return False
 
 
 def create_access_token(data: dict) -> str:

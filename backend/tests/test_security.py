@@ -12,6 +12,10 @@ def test_hash_and_verify():
     assert verify_password("wrong", h) is False
 
 
+def test_verify_password_returns_false_for_invalid_stored_hash():
+    assert verify_password("mysecret", "legacy-or-corrupt-hash") is False
+
+
 def test_token_roundtrip():
     token = create_access_token({"sub": "user-123"})
     payload = decode_access_token(token)

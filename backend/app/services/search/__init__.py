@@ -3,28 +3,42 @@ import logging
 
 from app.services.search.firecrawl import enrich_website
 from app.services.search.hunter import find_emails_by_domain
+from app.services.search.llm_search import llm_search_companies
 from app.services.search.serp import search_google, search_serp
 
 logger = logging.getLogger(__name__)
 
 
-async def search_companies(query: str, city: str | None = None, limit: int = 20) -> list[dict]:
-    """Параллельный поиск: Google Maps + Google Search (SerpAPI), затем Firecrawl + Hunter."""
+async def search_companies(
+    query: str,
+    city: str | None = None,
+    limit: int = 20,
+    *,
+    enrich: bool = True,
+    hunter: bool = True,
+    niche: str | None = None,
+) -> list[dict]:
+    """Параллельный поиск: Google Maps + Google Search (SerpAPI) + LLM, затем Firecrawl + Hunter."""
     logger.info("search_companies: start query=%r city=%r limit=%s", query, city, limit)
 
-    fetch = max(limit, 20)
-    maps_results, google_results = await asyncio.gather(
+    capped_limit = max(1, min(limit, 50))
+    fetch = min(max(capped_limit * 2, 8), 50)
+    maps_results, google_results, llm_results = await asyncio.gather(
         _safe_serp(query, city, fetch),
         _safe_google(query, city, fetch),
+        _safe_llm_search(niche or query, city, min(fetch, 20)),
     )
-    logger.info("search_companies: maps=%s google=%s", len(maps_results), len(google_results))
+    logger.info(
+        "search_companies: maps=%s google=%s llm=%s",
+        len(maps_results), len(google_results), len(llm_results),
+    )
 
     # Мёрджим: дедупликация по домену и имени
     seen_domains: set[str] = set()
     seen_names: set[str] = set()
     merged: list[dict] = []
 
-    for item in maps_results + google_results:
+    for item in maps_results + google_results + llm_results:
         domain = _domain(item.get("website"))
         name = item.get("name", "").lower()
         if domain and domain in seen_domains:
@@ -39,10 +53,10 @@ async def search_companies(query: str, city: str | None = None, limit: int = 20)
 
     # Приоритет: у кого есть сайт — выше
     merged.sort(key=lambda r: (0 if r.get("website") else 1))
-    results = merged[:limit]
+    results = merged[:capped_limit]
 
     # Firecrawl: обогащаем первые 5 у кого есть сайт
-    to_enrich = [r for r in results if r.get("website") and not r.get("website_summary")][:5]
+    to_enrich = [r for r in results if r.get("website") and not r.get("website_summary")][:5] if enrich else []
     if to_enrich:
         try:
             summaries = await asyncio.gather(
@@ -57,7 +71,7 @@ async def search_companies(query: str, city: str | None = None, limit: int = 20)
             logger.warning("search_companies: firecrawl gather failed: %r", exc)
 
     # Hunter: ищем email по домену для компаний без email
-    to_hunt = [r for r in results if r.get("website") and not r.get("email")][:10]
+    to_hunt = [r for r in results if r.get("website") and not r.get("email")][:10] if hunter else []
     if to_hunt:
         hunter_results = await asyncio.gather(
             *[find_emails_by_domain(r["website"]) for r in to_hunt],
@@ -85,6 +99,14 @@ async def _safe_google(query: str, city: str | None, limit: int) -> list[dict]:
         return await search_google(query, city, limit)
     except Exception as exc:
         logger.warning("search_companies: google failed: %r", exc)
+        return []
+
+
+async def _safe_llm_search(niche: str, city: str | None, count: int) -> list[dict]:
+    try:
+        return await llm_search_companies(niche, city, count)
+    except Exception as exc:
+        logger.warning("search_companies: llm_search failed: %r", exc)
         return []
 
 

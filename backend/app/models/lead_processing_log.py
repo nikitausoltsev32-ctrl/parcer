@@ -27,5 +27,6 @@ class LeadProcessingLog(Base):
     ai_credits_used: Mapped[int] = mapped_column(Integer, default=0)
     outcome: Mapped[str] = mapped_column(String, default="success")
     failure_reason: Mapped[str | None] = mapped_column(String, nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

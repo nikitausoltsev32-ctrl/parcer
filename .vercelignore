@@ -1,0 +1,13 @@
+.git
+.vercel
+**/.vercel
+**/.venv
+**/.pytest_cache
+**/.ruff_cache
+**/.uv-cache
+**/.tmp
+**/node_modules
+**/dist
+**/*.log
+backend/tests
+supabase/.temp

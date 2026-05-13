@@ -16,6 +16,7 @@ dependencies = [
     "procrastinate>=3.0.0",
     "psycopg[binary]>=3.1.0",
     "anthropic>=0.40.0",
+    "beautifulsoup4>=4.12.0",
     "httpx>=0.27.0",
     "python-multipart>=0.0.9",
     "passlib[argon2]>=1.7.4",
@@ -27,6 +28,7 @@ dependencies = [
     "dnspython>=2.6.0",
     "openai>=1.40.0",
     "sentry-sdk[fastapi]>=2.0.0",
+    "slowapi>=0.1.9",
 ]
 
 [project.optional-dependencies]
@@ -54,6 +56,9 @@ select = ["E", "F", "I", "UP"]
 "app/api/v1/auth.py" = ["E501"]
 "app/services/letters/generator.py" = ["E501"]
 "app/services/chat/tools.py" = ["E501"]
+"app/services/leads/crawler.py" = ["E501"]
+"app/services/leads/light_ai.py" = ["E501"]
+"app/services/leads/pipeline.py" = ["E402", "E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

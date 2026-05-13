@@ -13,6 +13,16 @@ def disable_external_email(monkeypatch):
     monkeypatch.setattr("app.core.config.settings.transactional_smtp_host", "")
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    from app.core.rate_limit import limiter
+
+    try:
+        limiter._storage.reset()
+    except Exception:
+        pass
+
+
 @pytest.fixture
 async def test_engine():
     engine = create_async_engine(TEST_DB, connect_args={"check_same_thread": False})
