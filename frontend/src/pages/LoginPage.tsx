@@ -35,22 +35,30 @@ export default function LoginPage() {
           </p>
         )}
 
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-        />
-        <input
-          type="password"
-          placeholder="Пароль"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-        />
+        <div className="space-y-1">
+          <label htmlFor="email" className="text-sm font-medium">Email <span className="text-red-500">*</span></label>
+          <input
+            id="email"
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        <div className="space-y-1">
+          <label htmlFor="password" className="text-sm font-medium">Пароль <span className="text-red-500">*</span></label>
+          <input
+            id="password"
+            type="password"
+            placeholder="Пароль"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
 
         <button
           type="submit"
