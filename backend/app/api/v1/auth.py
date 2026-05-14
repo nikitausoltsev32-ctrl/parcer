@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Cookie, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.rate_limit import limiter
 from app.schemas.auth import (
@@ -41,7 +42,8 @@ async def verify_email(request: Request, token: str, db: AsyncSession = Depends(
 @limiter.limit("10/minute")
 async def login(request: Request, body: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
     access, refresh = await authenticate_user(db, body.email, body.password)
-    response.set_cookie("refresh_token", refresh, httponly=True, samesite="lax", max_age=REFRESH_MAX_AGE, secure=False)
+    is_secure = getattr(settings, "app_env", "development") == "production"
+    response.set_cookie("refresh_token", refresh, httponly=True, samesite="lax", max_age=REFRESH_MAX_AGE, secure=is_secure)
     return TokenResponse(access_token=access)
 
 
@@ -49,7 +51,8 @@ async def login(request: Request, body: LoginRequest, response: Response, db: As
 @limiter.limit("10/minute")
 async def refresh(request: Request, response: Response, refresh_token: str | None = Cookie(default=None)):
     access, new_refresh = refresh_access(refresh_token)
-    response.set_cookie("refresh_token", new_refresh, httponly=True, samesite="lax", max_age=REFRESH_MAX_AGE, secure=False)
+    is_secure = getattr(settings, "app_env", "development") == "production"
+    response.set_cookie("refresh_token", new_refresh, httponly=True, samesite="lax", max_age=REFRESH_MAX_AGE, secure=is_secure)
     return TokenResponse(access_token=access)
 
 
