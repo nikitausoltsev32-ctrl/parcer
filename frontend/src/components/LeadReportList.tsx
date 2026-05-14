@@ -1,4 +1,4 @@
-import { useState, useEffect, type CSSProperties } from "react";
+import { useState, useEffect, useMemo, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { G, SOURCE_BADGE } from "../lib/design";
 
@@ -374,6 +374,26 @@ function LeadTable({ leads, compact }: { leads: LeadReportItem[]; compact: boole
     );
   }
 
+  // ⚡ Bolt Performance Optimization
+  // Use useMemo to prevent O(N) re-calculations on every render (e.g. hover state changes).
+  // This memoizes the processed row data array and reduces re-renders significantly on hover interactions.
+  const processedLeads = useMemo(() => leads.map((lead) => {
+    return {
+      lead,
+      name: companyName(lead),
+      // Повод: reason first, fall back to description so AI agent data is shown
+      reason: leadReason(lead) || leadDescription(lead),
+      score: leadScore(lead),
+      source: sourceLabel(lead),
+      painPoints: (lead.pain_points ?? []).filter(Boolean).slice(0, 2),
+      priority: clean(lead.lead_fit?.priority),
+      email: clean(lead.email),
+      phone: clean(lead.phone),
+      website: clean(lead.website),
+      siteShort: displayUrl(lead.website),
+    };
+  }), [leads]);
+
   return (
     <div
       style={{ overflowX: "auto" }}
@@ -389,18 +409,8 @@ function LeadTable({ leads, compact }: { leads: LeadReportItem[]; compact: boole
           </tr>
         </thead>
         <tbody>
-          {leads.map((lead, index) => {
-            const name       = companyName(lead);
-            // Повод: reason first, fall back to description so AI agent data is shown
-            const reason     = leadReason(lead) || leadDescription(lead);
-            const score      = leadScore(lead);
-            const source     = sourceLabel(lead);
-            const painPoints = (lead.pain_points ?? []).filter(Boolean).slice(0, 2);
-            const priority   = clean(lead.lead_fit?.priority);
-            const email      = clean(lead.email);
-            const phone      = clean(lead.phone);
-            const website    = clean(lead.website);
-            const siteShort  = displayUrl(lead.website);
+          {processedLeads.map((data, index) => {
+            const { lead, name, reason, score, source, painPoints, priority, email, phone, website, siteShort } = data;
             const isHovered  = hoveredIndex === index;
 
             return (

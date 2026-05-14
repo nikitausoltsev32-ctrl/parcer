@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { api } from "../lib/api";
 import { getToken } from "../lib/auth";
 import { streamSSE } from "../lib/sse";
@@ -172,14 +172,28 @@ const tdS: React.CSSProperties = {
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 function LeadResultsCard({ companies, onSaveRequest }: { companies: Company[]; onSaveRequest: () => void }) {
-  const sources = [...new Set(companies.map((c) => c.source).filter(Boolean))] as string[];
-  const scores = companies
-    .map((c) => (typeof c.score === "number" ? c.score : typeof c.lead_fit?.score === "number" ? c.lead_fit.score : null))
-    .filter((score): score is number => score !== null);
-  const avgScore = scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null;
-  const highScoreCount = scores.filter((score) => score >= 70).length;
-  const scoreColor = avgScore === null ? G.textMuted : avgScore >= 70 ? G.green : avgScore >= 45 ? G.amber : G.red;
-  const scoreBg = avgScore === null ? "rgba(26,37,64,0.07)" : avgScore >= 70 ? G.greenBg : avgScore >= 45 ? G.amberBg : G.redBg;
+  // ⚡ Bolt Performance Optimization
+  // Wrap calculation of sources, scores, and averages in useMemo
+  // to avoid O(N) redundant calculations on every keystroke in the chat input.
+  const { sources, scores, avgScore, highScoreCount, scoreColor, scoreBg } = useMemo(() => {
+    const computedSources = [...new Set(companies.map((c) => c.source).filter(Boolean))] as string[];
+    const computedScores = companies
+      .map((c) => (typeof c.score === "number" ? c.score : typeof c.lead_fit?.score === "number" ? c.lead_fit.score : null))
+      .filter((score): score is number => score !== null);
+    const computedAvgScore = computedScores.length > 0 ? Math.round(computedScores.reduce((sum, score) => sum + score, 0) / computedScores.length) : null;
+    const computedHighScoreCount = computedScores.filter((score) => score >= 70).length;
+    const computedScoreColor = computedAvgScore === null ? G.textMuted : computedAvgScore >= 70 ? G.green : computedAvgScore >= 45 ? G.amber : G.red;
+    const computedScoreBg = computedAvgScore === null ? "rgba(26,37,64,0.07)" : computedAvgScore >= 70 ? G.greenBg : computedAvgScore >= 45 ? G.amberBg : G.redBg;
+
+    return {
+      sources: computedSources,
+      scores: computedScores,
+      avgScore: computedAvgScore,
+      highScoreCount: computedHighScoreCount,
+      scoreColor: computedScoreColor,
+      scoreBg: computedScoreBg,
+    };
+  }, [companies]);
 
   return (
     <div style={{
