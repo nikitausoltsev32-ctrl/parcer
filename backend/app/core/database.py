@@ -6,8 +6,12 @@ from sqlalchemy.orm import DeclarativeBase
 from app.core.config import settings
 
 _ssl_ctx = ssl.create_default_context()
-_ssl_ctx.check_hostname = False
-_ssl_ctx.verify_mode = ssl.CERT_NONE
+if not settings.database_ssl_verify:
+    _ssl_ctx.check_hostname = False
+    _ssl_ctx.verify_mode = ssl.CERT_NONE
+else:
+    _ssl_ctx.check_hostname = True
+    _ssl_ctx.verify_mode = ssl.CERT_REQUIRED
 
 _db_url = settings.database_url.split("?")[0]
 
