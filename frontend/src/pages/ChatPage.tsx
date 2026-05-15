@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { api } from "../lib/api";
 import { getToken } from "../lib/auth";
 import { streamSSE } from "../lib/sse";
@@ -172,14 +172,21 @@ const tdS: React.CSSProperties = {
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 function LeadResultsCard({ companies, onSaveRequest }: { companies: Company[]; onSaveRequest: () => void }) {
-  const sources = [...new Set(companies.map((c) => c.source).filter(Boolean))] as string[];
-  const scores = companies
-    .map((c) => (typeof c.score === "number" ? c.score : typeof c.lead_fit?.score === "number" ? c.lead_fit.score : null))
-    .filter((score): score is number => score !== null);
-  const avgScore = scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null;
-  const highScoreCount = scores.filter((score) => score >= 70).length;
-  const scoreColor = avgScore === null ? G.textMuted : avgScore >= 70 ? G.green : avgScore >= 45 ? G.amber : G.red;
-  const scoreBg = avgScore === null ? "rgba(26,37,64,0.07)" : avgScore >= 70 ? G.greenBg : avgScore >= 45 ? G.amberBg : G.redBg;
+  // ⚡ Bolt Optimization: Memoized derived state calculations
+  // Why: Prevents expensive O(N) recalculations of scores and filtering across the entire company list on every render
+  // Impact: Avoids array mapping overhead completely when parent components re-render without `companies` changing
+  const { sources, scores, avgScore, highScoreCount, scoreColor, scoreBg } = useMemo(() => {
+    const sources = [...new Set(companies.map((c) => c.source).filter(Boolean))] as string[];
+    const scores = companies
+      .map((c) => (typeof c.score === "number" ? c.score : typeof c.lead_fit?.score === "number" ? c.lead_fit.score : null))
+      .filter((score): score is number => score !== null);
+    const avgScore = scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null;
+    const highScoreCount = scores.filter((score) => score >= 70).length;
+    const scoreColor = avgScore === null ? G.textMuted : avgScore >= 70 ? G.green : avgScore >= 45 ? G.amber : G.red;
+    const scoreBg = avgScore === null ? "rgba(26,37,64,0.07)" : avgScore >= 70 ? G.greenBg : avgScore >= 45 ? G.amberBg : G.redBg;
+
+    return { sources, scores, avgScore, highScoreCount, scoreColor, scoreBg };
+  }, [companies]);
 
   return (
     <div style={{

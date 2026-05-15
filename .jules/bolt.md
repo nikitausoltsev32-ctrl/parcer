@@ -1,0 +1,4 @@
+## 2024-05-15 - React Component Render Optimization
+
+**Learning:** This codebase uses UI patterns that aggressively track high-frequency mouse movements via `onMouseMove` (e.g. `hoverPos` state for custom tooltip positioning). This triggers frequent re-renders of large parent components (`LeadTable`). Un-memoized O(N) array transformations (like `filter`, `slice`, `map`, and `reduce`) inside these render functions caused substantial overhead during these re-renders, causing severe UI lag.
+**Action:** When working on React components in this codebase, check if mouse position or other high-frequency events are stored in state. If so, ensure that all array operations and list transformations inside the component are strictly wrapped in `useMemo` so they are not needlessly recalculated on every micro-movement.
