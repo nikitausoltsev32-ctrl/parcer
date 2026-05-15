@@ -1,5 +1,4 @@
 import uuid
-from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -71,9 +70,9 @@ async def track_click(
     db: AsyncSession = Depends(get_db),
 ):
     tid = str(tracking_id)
-    destination = unquote(url)
+    destination = url
     if not verify(tid, sig):
-        return RedirectResponse(url=destination, status_code=302)
+        return HTMLResponse("<html><body><p>Ссылка недействительна.</p></body></html>", status_code=400)
 
     msg_row = await db.execute(
         select(CampaignMessage).where(CampaignMessage.tracking_id == tracking_id)
