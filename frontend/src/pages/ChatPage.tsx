@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { api } from "../lib/api";
 import { getToken } from "../lib/auth";
 import { streamSSE } from "../lib/sse";
@@ -172,14 +172,26 @@ const tdS: React.CSSProperties = {
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 function LeadResultsCard({ companies, onSaveRequest }: { companies: Company[]; onSaveRequest: () => void }) {
-  const sources = [...new Set(companies.map((c) => c.source).filter(Boolean))] as string[];
-  const scores = companies
-    .map((c) => (typeof c.score === "number" ? c.score : typeof c.lead_fit?.score === "number" ? c.lead_fit.score : null))
-    .filter((score): score is number => score !== null);
-  const avgScore = scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null;
-  const highScoreCount = scores.filter((score) => score >= 70).length;
-  const scoreColor = avgScore === null ? G.textMuted : avgScore >= 70 ? G.green : avgScore >= 45 ? G.amber : G.red;
-  const scoreBg = avgScore === null ? "rgba(26,37,64,0.07)" : avgScore >= 70 ? G.greenBg : avgScore >= 45 ? G.amberBg : G.redBg;
+  const { sources, scores, avgScore, highScoreCount, scoreColor, scoreBg } = useMemo(() => {
+    // ⚡ Bolt: Memoize O(N) operations to prevent UI lag during frequent re-renders
+    const sourcesList = [...new Set(companies.map((c) => c.source).filter(Boolean))] as string[];
+    const scoresList = companies
+      .map((c) => (typeof c.score === "number" ? c.score : typeof c.lead_fit?.score === "number" ? c.lead_fit.score : null))
+      .filter((score): score is number => score !== null);
+    const avg = scoresList.length > 0 ? Math.round(scoresList.reduce((sum, score) => sum + score, 0) / scoresList.length) : null;
+    const highCount = scoresList.filter((score) => score >= 70).length;
+    const color = avg === null ? G.textMuted : avg >= 70 ? G.green : avg >= 45 ? G.amber : G.red;
+    const bg = avg === null ? "rgba(26,37,64,0.07)" : avg >= 70 ? G.greenBg : avg >= 45 ? G.amberBg : G.redBg;
+
+    return {
+      sources: sourcesList,
+      scores: scoresList,
+      avgScore: avg,
+      highScoreCount: highCount,
+      scoreColor: color,
+      scoreBg: bg
+    };
+  }, [companies]);
 
   return (
     <div style={{
