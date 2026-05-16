@@ -1,4 +1,4 @@
-import { useState, useEffect, type CSSProperties } from "react";
+import { useState, useEffect, useMemo, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { G, SOURCE_BADGE } from "../lib/design";
 
@@ -355,6 +355,33 @@ function LeadTable({ leads, compact }: { leads: LeadReportItem[]; compact: boole
   const [hoverPos, setHoverPos] = useState({ x: 0, y: 0 });
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
   const hoveredLead = hoveredIndex !== null ? leads[hoveredIndex] : null;
+
+  // ⚡ Bolt: Memoize the O(N) array transformation.
+  // The component tracks `hoverPos` on every mouse move, triggering frequent re-renders.
+  // Memoizing this prevents expensive array mapping, filtering, and object creation on every pixel moved.
+  const processedLeads = useMemo(() => {
+    return leads.map((lead, index) => {
+      const name       = companyName(lead);
+      const reason     = leadReason(lead) || leadDescription(lead);
+      const score      = leadScore(lead);
+      const source     = sourceLabel(lead);
+      const painPoints = (lead.pain_points ?? []).filter(Boolean).slice(0, 2);
+      const priority   = clean(lead.lead_fit?.priority);
+      const email      = clean(lead.email);
+      const phone      = clean(lead.phone);
+      const website    = clean(lead.website);
+      const siteShort  = displayUrl(lead.website);
+
+      return {
+        ...lead,
+        _processed: {
+          index, name, reason, score, source, painPoints,
+          priority, email, phone, website, siteShort
+        }
+      };
+    });
+  }, [leads]);
+
   const th = thStyle(compact);
   const td = tdStyle(compact);
 
@@ -389,18 +416,8 @@ function LeadTable({ leads, compact }: { leads: LeadReportItem[]; compact: boole
           </tr>
         </thead>
         <tbody>
-          {leads.map((lead, index) => {
-            const name       = companyName(lead);
-            // Повод: reason first, fall back to description so AI agent data is shown
-            const reason     = leadReason(lead) || leadDescription(lead);
-            const score      = leadScore(lead);
-            const source     = sourceLabel(lead);
-            const painPoints = (lead.pain_points ?? []).filter(Boolean).slice(0, 2);
-            const priority   = clean(lead.lead_fit?.priority);
-            const email      = clean(lead.email);
-            const phone      = clean(lead.phone);
-            const website    = clean(lead.website);
-            const siteShort  = displayUrl(lead.website);
+          {processedLeads.map((lead) => {
+            const { index, name, reason, score, source, painPoints, priority, email, phone, website, siteShort } = lead._processed;
             const isHovered  = hoveredIndex === index;
 
             return (

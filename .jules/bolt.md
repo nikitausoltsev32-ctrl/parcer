@@ -1,0 +1,3 @@
+## 2026-05-16 - Unmemoized Array Operations with High-Frequency State Events
+**Learning:** In React components that track high-frequency events (e.g., hover coordinates on 'onMouseMove') in state, any unmemoized O(N) array transformations (like map, filter, or generating string templates) will cause severe UI lag. The entire array is reprocessed on every minor state update (every pixel the mouse moves).
+**Action:** Always wrap expensive array operations or data transformations inside `useMemo` if the component contains state that updates frequently, ensuring the memoized output is used for rendering.
