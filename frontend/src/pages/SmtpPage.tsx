@@ -324,6 +324,8 @@ export default function SmtpPage() {
                 </button>
                 <button
                   onClick={() => deleteMut.mutate(acc.id)}
+                  aria-label="Удалить"
+                  title="Удалить"
                   style={{ background: "none", border: "none", cursor: "pointer", color: G.textMuted, padding: "4px" }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -356,7 +358,7 @@ export default function SmtpPage() {
                 <div style={{ fontWeight: 700, fontSize: "15px", color: G.textPrimary }}>Подключить почту</div>
                 <div style={{ fontSize: "12px", color: G.textMuted, marginTop: "2px" }}>Шаг {step} из 2</div>
               </div>
-              <button onClick={() => { setShowSetup(false); resetSetupState(); }} style={{ background: "none", border: "none", cursor: "pointer", color: G.textMuted, fontSize: "20px", lineHeight: 1 }}>×</button>
+              <button aria-label="Закрыть" title="Закрыть" onClick={() => { setShowSetup(false); resetSetupState(); }} style={{ background: "none", border: "none", cursor: "pointer", color: G.textMuted, fontSize: "20px", lineHeight: 1 }}>×</button>
             </div>
 
             <div style={{ padding: "20px 24px" }}>
