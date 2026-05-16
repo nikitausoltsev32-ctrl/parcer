@@ -951,6 +951,7 @@ export default function ChatPage() {
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={loading}
+                    aria-label="Import contacts"
                     title="Import contacts"
                     style={{
                       width: "32px", height: "32px", borderRadius: "9px",
@@ -1136,6 +1137,7 @@ export default function ChatPage() {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={loading}
+                  aria-label="Import contacts"
                   title="Import contacts"
                   style={{
                     width: "28px", height: "28px", borderRadius: "8px",
