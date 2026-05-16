@@ -14,12 +14,13 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
 
     # Security
-    secret_key: str = "dev-secret-change-me"
+    secret_key: str
     fernet_key: str = ""
-    tracking_secret: str = "dev-tracking-secret-change-me"
+    tracking_secret: str
 
     # Database / Storage
-    database_url: str = "postgresql+asyncpg://postgres:changeme@localhost:5432/postgres"
+    database_url: str
+    database_ssl_verify: bool = True
     supabase_url: str = ""
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""

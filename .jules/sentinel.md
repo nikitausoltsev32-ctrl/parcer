@@ -1,0 +1,4 @@
+## 2024-05-16 - Removed default development secrets from config
+**Vulnerability:** Core configuration in `backend/app/core/config.py` contained hardcoded, default sensitive values (`secret_key`, `tracking_secret`, `database_url`) and forced `ssl.CERT_NONE` without an option to verify SSL in production.
+**Learning:** Hardcoded dev defaults for secrets provide a fallback mechanism that allows the application to inadvertently boot with insecure credentials in a production environment if the environment variables are missing. Additionally, unverified SSL connections to databases can expose credentials or data to MITM attacks.
+**Prevention:** Ensure Pydantic `BaseSettings` models declare sensitive fields without defaults (making them mandatory), and provide configuration options to toggle security features like SSL verification with secure defaults (`True`).
