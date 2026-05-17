@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import AsyncSessionLocal
 from app.models.lead_processing_log import LeadProcessingLog
 from app.models.user import User
-from app.services.leads.policy import effective_search_limit
 from app.services.leads.pipeline import run_lead_search
+from app.services.leads.policy import effective_search_limit
 
 
 class LeadSearchQuotaExceededError(Exception):
