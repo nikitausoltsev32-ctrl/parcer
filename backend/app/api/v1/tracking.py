@@ -1,5 +1,4 @@
 import uuid
-from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -71,9 +70,10 @@ async def track_click(
     db: AsyncSession = Depends(get_db),
 ):
     tid = str(tracking_id)
-    destination = unquote(url)
+    # 🛡️ Sentinel: Do not manually unquote `url` to prevent double-unquoting (FastAPI handles this).
+    # 🛡️ Sentinel: Return 400 Bad Request on invalid signature to prevent Open Redirect.
     if not verify(tid, sig):
-        return RedirectResponse(url=destination, status_code=302)
+        return HTMLResponse("<html><body><p>Invalid tracking signature.</p></body></html>", status_code=400)
 
     msg_row = await db.execute(
         select(CampaignMessage).where(CampaignMessage.tracking_id == tracking_id)
@@ -90,10 +90,10 @@ async def track_click(
                 stats = dict(campaign.stats or {})
                 stats["clicked"] = stats.get("clicked", 0) + 1
                 campaign.stats = stats
-        db.add(Event(message_id=msg.id, campaign_id=msg.campaign_id, type="click", meta={"url": destination}))
+        db.add(Event(message_id=msg.id, campaign_id=msg.campaign_id, type="click", meta={"url": url}))
         await db.commit()
 
-    return RedirectResponse(url=destination, status_code=302)
+    return RedirectResponse(url=url, status_code=302)
 
 
 @router.get("/unsub/{tracking_id}", response_class=HTMLResponse)
