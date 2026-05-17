@@ -1,0 +1,4 @@
+## 2024-05-17 - Fix Open Redirect and Double-Unquote Vulnerability in Tracking Click Endpoint
+**Vulnerability:** Open Redirect (SSRF risk) and Signature Validation Bypass in the `track_click` endpoint.
+**Learning:** The endpoint verified signatures but failed open (redirected anyway) when verification failed, creating an Open Redirect vulnerability where attackers could supply a fake signature and arbitrary URL. Furthermore, it manually called `urllib.parse.unquote` on the `url` query parameter, while FastAPI inherently unquotes parameters. This double-unquoting could lead to subtle verification mismatches and bypassing security controls.
+**Prevention:** On signature verification failures in tracking or redirect endpoints, always return an HTTP error response (e.g., 400 Bad Request) instead of failing open or performing a redirect. Rely on the framework (FastAPI) for parameter unquoting and never manually unquote query parameters to prevent double-unquoting bugs.
