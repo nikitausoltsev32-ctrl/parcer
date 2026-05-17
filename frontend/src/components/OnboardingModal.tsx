@@ -145,8 +145,8 @@ function Slide4({ answers, setAnswers }: { answers: Record<string, string>; setA
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {fields.map((f, i) => (
             <div key={f.id} style={{ animation: `obFadeUp 0.4s ${0.15 + i * 0.08}s cubic-bezier(0.16,1,0.3,1) both` }}>
-              <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "rgba(255,255,255,0.5)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.06em" }}>{f.label}</label>
-              <input value={answers[f.id] || ""} onChange={e => setAnswers(a => ({ ...a, [f.id]: e.target.value }))} placeholder={f.placeholder} style={{ width: "100%", padding: "13px 15px", borderRadius: "13px", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.10)", backdropFilter: "blur(12px)", color: "white", fontSize: "14px", fontFamily: "Manrope, sans-serif", outline: "none", boxSizing: "border-box" }} />
+              <label htmlFor={`onboard-${f.id}`} style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "rgba(255,255,255,0.5)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.06em" }}>{f.label}</label>
+              <input id={`onboard-${f.id}`} value={answers[f.id] || ""} onChange={e => setAnswers(a => ({ ...a, [f.id]: e.target.value }))} placeholder={f.placeholder} style={{ width: "100%", padding: "13px 15px", borderRadius: "13px", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.10)", backdropFilter: "blur(12px)", color: "white", fontSize: "14px", fontFamily: "Manrope, sans-serif", outline: "none", boxSizing: "border-box" }} />
               {f.note && <div style={{ fontSize: "11.5px", color: "rgba(255,255,255,0.35)", marginTop: "5px" }}>{f.note}</div>}
             </div>
           ))}

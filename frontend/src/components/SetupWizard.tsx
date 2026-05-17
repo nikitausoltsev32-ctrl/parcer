@@ -82,8 +82,9 @@ export default function SetupWizard({ onDone }: Props) {
         {step === 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div>
-              <label style={{ fontSize: "12.5px", fontWeight: 600, color: "#555", display: "block", marginBottom: "6px" }}>Ваше имя</label>
+              <label htmlFor="wizard-fullname" style={{ fontSize: "12.5px", fontWeight: 600, color: "#555", display: "block", marginBottom: "6px" }}>Ваше имя</label>
               <input
+                id="wizard-fullname"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Иван Иванов"
@@ -92,8 +93,9 @@ export default function SetupWizard({ onDone }: Props) {
               />
             </div>
             <div>
-              <label style={{ fontSize: "12.5px", fontWeight: 600, color: "#555", display: "block", marginBottom: "6px" }}>Город / регион</label>
+              <label htmlFor="wizard-city" style={{ fontSize: "12.5px", fontWeight: 600, color: "#555", display: "block", marginBottom: "6px" }}>Город / регион</label>
               <input
+                id="wizard-city"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
                 placeholder="Москва"
@@ -107,8 +109,9 @@ export default function SetupWizard({ onDone }: Props) {
         {step === 1 && (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div>
-              <label style={{ fontSize: "12.5px", fontWeight: 600, color: "#555", display: "block", marginBottom: "6px" }}>Чем занимается ваш бизнес?</label>
+              <label htmlFor="wizard-business" style={{ fontSize: "12.5px", fontWeight: 600, color: "#555", display: "block", marginBottom: "6px" }}>Чем занимается ваш бизнес?</label>
               <textarea
+                id="wizard-business"
                 value={business}
                 onChange={(e) => setBusiness(e.target.value)}
                 placeholder="Разрабатываем мобильные приложения для малого бизнеса"
@@ -118,8 +121,9 @@ export default function SetupWizard({ onDone }: Props) {
               />
             </div>
             <div>
-              <label style={{ fontSize: "12.5px", fontWeight: 600, color: "#555", display: "block", marginBottom: "6px" }}>Что предлагаете клиентам?</label>
+              <label htmlFor="wizard-offer" style={{ fontSize: "12.5px", fontWeight: 600, color: "#555", display: "block", marginBottom: "6px" }}>Что предлагаете клиентам?</label>
               <textarea
+                id="wizard-offer"
                 value={offer}
                 onChange={(e) => setOffer(e.target.value)}
                 placeholder="Разработка MVP за 4 недели с фиксированной ценой"
