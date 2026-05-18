@@ -1,0 +1,4 @@
+## 2024-05-18 - Fix Open Redirect and Double-Unquoting in tracking endpoint
+**Vulnerability:** The tracking click endpoint (`/api/v1/tracking/click`) was vulnerable to Open Redirect if an attacker provided an invalid signature but valid tracking ID. Additionally, manual call to `urllib.parse.unquote(url)` led to double-unquoting since FastAPI implicitly unquotes query parameters.
+**Learning:** Returning a redirect even when signature validation fails defeats the purpose of the signature and turns the endpoint into an open redirector. Also, FastAPI handles query parameter unquoting automatically.
+**Prevention:** On signature verification failures in tracking or redirect endpoints, always return an HTTP error response (e.g., 400 Bad Request) instead of failing open or performing a redirect. Avoid manual unquoting of query string variables in FastAPI.
