@@ -1,4 +1,4 @@
-import { useState, useEffect, type CSSProperties } from "react";
+import { useState, useEffect, useMemo, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { G, SOURCE_BADGE } from "../lib/design";
 
@@ -355,8 +355,28 @@ function LeadTable({ leads, compact }: { leads: LeadReportItem[]; compact: boole
   const [hoverPos, setHoverPos] = useState({ x: 0, y: 0 });
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
   const hoveredLead = hoveredIndex !== null ? leads[hoveredIndex] : null;
-  const th = thStyle(compact);
-  const td = tdStyle(compact);
+  const th = useMemo(() => thStyle(compact), [compact]);
+  const td = useMemo(() => tdStyle(compact), [compact]);
+
+  const processedLeads = useMemo(() => {
+    return leads.map((lead, index) => {
+      const name = companyName(lead);
+      const reason = leadReason(lead) || leadDescription(lead);
+      const score = leadScore(lead);
+      const source = sourceLabel(lead);
+      const painPoints = (lead.pain_points ?? []).filter(Boolean).slice(0, 2);
+      const priority = clean(lead.lead_fit?.priority);
+      const email = clean(lead.email);
+      const phone = clean(lead.phone);
+      const website = clean(lead.website);
+      const siteShort = displayUrl(lead.website);
+      const key = lead.id ?? website ?? `${name}-${index}`;
+
+      return {
+        lead, index, key, name, reason, score, source, painPoints, priority, email, phone, website, siteShort
+      };
+    });
+  }, [leads]);
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 640);
@@ -367,8 +387,8 @@ function LeadTable({ leads, compact }: { leads: LeadReportItem[]; compact: boole
   if (isMobile) {
     return (
       <div>
-        {leads.map((lead, index) => (
-          <MobileLeadCard key={lead.id ?? lead.website ?? `${companyName(lead)}-${index}`} lead={lead} />
+        {processedLeads.map((item) => (
+          <MobileLeadCard key={item.key} lead={item.lead} />
         ))}
       </div>
     );
@@ -389,23 +409,12 @@ function LeadTable({ leads, compact }: { leads: LeadReportItem[]; compact: boole
           </tr>
         </thead>
         <tbody>
-          {leads.map((lead, index) => {
-            const name       = companyName(lead);
-            // Повод: reason first, fall back to description so AI agent data is shown
-            const reason     = leadReason(lead) || leadDescription(lead);
-            const score      = leadScore(lead);
-            const source     = sourceLabel(lead);
-            const painPoints = (lead.pain_points ?? []).filter(Boolean).slice(0, 2);
-            const priority   = clean(lead.lead_fit?.priority);
-            const email      = clean(lead.email);
-            const phone      = clean(lead.phone);
-            const website    = clean(lead.website);
-            const siteShort  = displayUrl(lead.website);
+          {processedLeads.map(({ index, key, name, reason, score, source, painPoints, priority, email, phone, website, siteShort }) => {
             const isHovered  = hoveredIndex === index;
 
             return (
               <tr
-                key={lead.id ?? website ?? `${name}-${index}`}
+                key={key}
                 style={{
                   cursor: "default",
                   background: isHovered ? "rgba(74,111,165,0.06)" : "transparent",
