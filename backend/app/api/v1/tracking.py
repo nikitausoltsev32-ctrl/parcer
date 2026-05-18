@@ -1,7 +1,6 @@
 import uuid
-from urllib.parse import unquote
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,9 +70,11 @@ async def track_click(
     db: AsyncSession = Depends(get_db),
 ):
     tid = str(tracking_id)
-    destination = unquote(url)
+    # Security: Avoid manual unquote since FastAPI already unquotes query parameters.
+    destination = url
     if not verify(tid, sig):
-        return RedirectResponse(url=destination, status_code=302)
+        # Security: Do not redirect on invalid signature to prevent Open Redirect
+        raise HTTPException(status_code=400, detail="Invalid signature")
 
     msg_row = await db.execute(
         select(CampaignMessage).where(CampaignMessage.tracking_id == tracking_id)
