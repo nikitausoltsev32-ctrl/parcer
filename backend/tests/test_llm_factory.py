@@ -55,3 +55,24 @@ def test_openrouter_client_uses_openrouter_base_and_key(monkeypatch):
     assert client.base_url == "https://openrouter.ai/api/v1"
     assert client.api_key == "or-test-key"
     assert client.model == "deepseek/deepseek-chat"
+
+
+def test_stage_routing_picks_openrouter_for_light_ai(monkeypatch):
+    monkeypatch.setattr(settings, "openrouter_api_key", "or-key")
+    monkeypatch.setattr(settings, "nvidia_api_key", "nv-key")
+    client = get_llm_client("light_ai")
+    assert client.base_url == "https://openrouter.ai/api/v1"
+    assert client.model == "deepseek/deepseek-chat"
+
+
+def test_stage_routing_falls_back_to_nvidia_without_openrouter(monkeypatch):
+    monkeypatch.setattr(settings, "openrouter_api_key", "")
+    monkeypatch.setattr(settings, "nvidia_api_key", "nv-key")
+    client = get_llm_client("light_ai")
+    assert client.model == "z-ai/glm-5.1"
+
+
+def test_legacy_task_classify_unchanged(monkeypatch):
+    # Legacy tasks not in STAGE_ROUTING read settings.llm_classify_*
+    client = get_llm_client("classify")
+    assert client.model == "z-ai/glm-5.1"

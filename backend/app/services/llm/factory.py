@@ -3,13 +3,16 @@ from app.services.llm.base import LLMClient
 from app.services.llm.glm import GLMClient
 from app.services.llm.glm_nvidia import GLMNvidiaClient
 from app.services.llm.groq import GroqClient
+from app.services.llm.openrouter import OpenRouterClient
 from app.services.llm.qwen import QwenClient
+from app.services.llm.routing import STAGE_ROUTING, resolve_stage
 
 _OPENAI_PROVIDERS = {
     "groq": GroqClient,
     "qwen": QwenClient,
     "glm": GLMClient,
     "nvidia": GLMNvidiaClient,
+    "openrouter": OpenRouterClient,
 }
 
 CHAT_MODEL_OPTIONS = [
@@ -51,11 +54,9 @@ def is_available_model_override(model_id: str | None) -> bool:
 
 
 def get_llm_client(task: str, *, model_override: str | None = None) -> LLMClient:
-    """task: 'chat' | 'letters' | 'classify' | 'enrich'"""
-    provider = getattr(settings, f"llm_{task}_provider")
-    model = getattr(settings, f"llm_{task}_model")
+    """task: legacy 'chat'|'letters'|'classify'|'enrich' or a stage name from STAGE_ROUTING."""
+    thinking = None
 
-    option = None
     if model_override:
         option = _CHAT_MODEL_BY_ID.get(model_override)
         if not option:
@@ -64,6 +65,12 @@ def get_llm_client(task: str, *, model_override: str | None = None) -> LLMClient
             raise ValueError(f"LLM model override is not configured: {model_override}")
         provider = option["provider"]
         model = option["model"]
+        thinking = option.get("thinking")
+    elif task in STAGE_ROUTING:
+        provider, model = resolve_stage(task)
+    else:
+        provider = getattr(settings, f"llm_{task}_provider")
+        model = getattr(settings, f"llm_{task}_model")
 
     if provider == "claude":
         from app.services.llm.claude import ClaudeClient
@@ -73,6 +80,6 @@ def get_llm_client(task: str, *, model_override: str | None = None) -> LLMClient
     if not cls:
         raise ValueError(f"Unknown LLM provider: {provider}")
     kwargs = {}
-    if provider == "nvidia" and option is not None:
-        kwargs["thinking"] = option.get("thinking")
+    if provider == "nvidia" and thinking is not None:
+        kwargs["thinking"] = thinking
     return cls(model=model, **kwargs)
