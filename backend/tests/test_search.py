@@ -178,7 +178,7 @@ async def test_search_tool_starts_async_lead_pipeline(monkeypatch):
         "__user": user,
         "query": "design studios",
         "city": "Kazan",
-        "limit": 1,
+        "limit": 10,
         "__ai_model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
     })
 
@@ -187,13 +187,13 @@ async def test_search_tool_starts_async_lead_pipeline(monkeypatch):
         "log_id": "11111111-1111-1111-1111-111111111111",
         "query": "design studios",
         "city": "Kazan",
-        "limit": 1,
+        "limit": 10,
     }
     assert calls[0]["db"] is db
     assert calls[0]["user"] is user
     assert calls[0]["query"] == "design studios"
     assert calls[0]["city"] == "Kazan"
-    assert calls[0]["limit"] == 1
+    assert calls[0]["limit"] == 10
     assert calls[0]["list_name"] == "design studios Kazan"
     assert calls[0]["fast_mode"] is True
     assert calls[0]["ai_model"] == "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
@@ -215,3 +215,26 @@ Studio One designs B2B websites, product identities, and launch campaigns for te
         "Studio One. Studio One designs B2B websites, product identities, "
         "and launch campaigns for technology teams."
     )
+
+
+async def test_perplexity_search_parses_and_tags_source(monkeypatch):
+    import pytest
+    from app.services.search import perplexity_search as ps
+    from app.services.llm.base import LLMResult
+
+    async def fake_logged_chat(*args, **kwargs):
+        return LLMResult(
+            content='{"companies":[{"name":"ООО Тест","website":"https://test.ru","city":"Москва","description":"d"}]}'
+        )
+
+    async def fake_head_validate(companies):
+        return companies  # skip network check
+
+    monkeypatch.setattr(ps, "logged_chat", fake_logged_chat)
+    monkeypatch.setattr(ps, "_head_validate", fake_head_validate)
+
+    out = await ps.perplexity_search_companies("стоматологии", "Москва", count=5)
+    assert out == [
+        {"name": "ООО Тест", "website": "https://test.ru", "city": "Москва",
+         "description": "d", "source": "perplexity"}
+    ]
