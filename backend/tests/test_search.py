@@ -30,10 +30,14 @@ async def test_search_companies_returns_google_maps_results(monkeypatch):
     async def no_hunter(domain):
         return []
 
+    async def no_discovery(*a, **k): return []
+
     monkeypatch.setattr(search_module, "search_serp", fake_serp)
     monkeypatch.setattr(search_module, "search_google", fake_google)
     monkeypatch.setattr(search_module, "enrich_website", fake_enrich)
     monkeypatch.setattr(search_module, "find_emails_by_domain", no_hunter)
+    monkeypatch.setattr(search_module, "llm_search_companies", no_discovery)
+    monkeypatch.setattr(search_module, "perplexity_search_companies", no_discovery)
 
     results = await search_module.search_companies("design studios", "Kazan", 5)
 
@@ -218,7 +222,6 @@ Studio One designs B2B websites, product identities, and launch campaigns for te
 
 
 async def test_perplexity_search_parses_and_tags_source(monkeypatch):
-    import pytest
     from app.services.search import perplexity_search as ps
     from app.services.llm.base import LLMResult
 
@@ -238,3 +241,24 @@ async def test_perplexity_search_parses_and_tags_source(monkeypatch):
         {"name": "ООО Тест", "website": "https://test.ru", "city": "Москва",
          "description": "d", "source": "perplexity"}
     ]
+
+
+async def test_search_uses_perplexity_when_openrouter_key_present(monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "openrouter_api_key", "or-key")
+
+    async def fake_serp(*a, **k): return []
+    async def fake_google(*a, **k): return []
+    async def fake_perplexity(niche, city, count):
+        return [{"name": "P", "website": "https://p.ru", "source": "perplexity"}]
+    async def fake_llm(niche, city, count):
+        raise AssertionError("llm_search must not be used when OpenRouter key is set")
+
+    monkeypatch.setattr(search_module, "search_serp", fake_serp)
+    monkeypatch.setattr(search_module, "search_google", fake_google)
+    monkeypatch.setattr(search_module, "perplexity_search_companies", fake_perplexity)
+    monkeypatch.setattr(search_module, "llm_search_companies", fake_llm)
+
+    out = await search_module.search_companies("ниша", "Москва", limit=10, enrich=False, hunter=False)
+    assert any(r.get("source") == "perplexity" for r in out)
