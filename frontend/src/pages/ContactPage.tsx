@@ -126,7 +126,7 @@ export default function ContactPage() {
                 <div style={{ fontSize: "16px", fontWeight: 700, color: G.textPrimary }}>{contact.full_name}</div>
                 {contact.company_name && (
                   <span
-                    onClick={() => navigate(`/app/companies/${encodeURIComponent(contact.company_name!)}`)}
+                    onClick={() => navigate(`/app/contacts`)}
                     style={{ fontSize: "13px", color: G.navyLight, cursor: "pointer" }}
                   >{contact.company_name}</span>
                 )}
