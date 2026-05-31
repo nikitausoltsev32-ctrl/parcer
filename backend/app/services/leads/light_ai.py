@@ -88,7 +88,7 @@ async def run_light_ai(
     about_text: str = "",
     model_override: str | None = None,
 ) -> LightAIResult:
-    client = get_llm_client("classify", model_override=model_override)
+    client = get_llm_client("light_ai", model_override=model_override)
     prompt = _PROMPT.format(
         title=_clean_string(title)[:200],
         meta_description=_clean_string(meta_description)[:300],

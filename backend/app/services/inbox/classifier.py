@@ -18,7 +18,7 @@ SYSTEM_PROMPT = """Классифицируй входящее B2B-письмо 
 
 
 async def classify_inbox_message(body_text: str) -> dict:
-    client = get_llm_client("classify")
+    client = get_llm_client("inbox_classify")
     text = (body_text or "")[:1500]
     result = await client.chat(
         messages=[LLMMessage(role="system", content=SYSTEM_PROMPT), LLMMessage(role="user", content=text)],

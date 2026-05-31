@@ -37,7 +37,7 @@ async def generate_outreach(
     reason_to_contact: str | None,
     log: LoggedLLMCall,
 ) -> dict:
-    client = get_llm_client("letters")
+    client = get_llm_client("outreach")
     prompt = _PROMPT.format(
         service_offered=service_offered[:200],
         company_name=company_name or "Компания",

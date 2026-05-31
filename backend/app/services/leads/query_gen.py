@@ -61,7 +61,7 @@ async def generate_queries(
     log: LoggedLLMCall,
     model_override: str | None = None,
 ) -> list[str]:
-    client = get_llm_client("classify", model_override=model_override)
+    client = get_llm_client("query_gen", model_override=model_override)
     prompt = _PROMPT.format(
         niche=niche,
         city=city or "любой город",

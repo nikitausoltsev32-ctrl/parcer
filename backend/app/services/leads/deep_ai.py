@@ -70,7 +70,7 @@ async def run_deep_ai(
     pages_text = "\n\n---\n\n".join(
         f"URL: {p['url']}\n{p.get('html', '')[:3000]}" for p in pages[:5]
     )
-    client = get_llm_client("letters")
+    client = get_llm_client("deep_ai")
     prompt = _PROMPT.format(
         service_offered=service_offered[:200],
         pages_text=pages_text[:8000],

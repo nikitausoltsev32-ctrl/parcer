@@ -38,7 +38,7 @@ async def classify_url(
     log: LoggedLLMCall,
     model_override: str | None = None,
 ) -> str:
-    client = get_llm_client("classify", model_override=model_override)
+    client = get_llm_client("url_classify", model_override=model_override)
     prompt = _PROMPT.format(url=url, title=title[:200], description=description[:300])
     result = await logged_chat(
         client,
