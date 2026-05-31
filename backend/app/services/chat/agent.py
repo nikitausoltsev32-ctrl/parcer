@@ -88,9 +88,15 @@ def _forced_search_args(user_text: str) -> dict | None:
         city = city_match.group(1).strip(" .,!?:;")
         query = query[:city_match.start()].strip(" .,!?:;")
 
+    limit = 20
+    limit_match = re.match(r"^(\d{1,2})\s+", query)
+    if limit_match:
+        limit = max(1, min(int(limit_match.group(1)), 50))
+        query = query[limit_match.end():].strip(" .,!?:;")
+
     if not query:
         return None
-    return {"query": query, "city": city, "limit": 20}
+    return {"query": query, "city": city, "limit": limit}
 
 
 def _forced_import_args(user_text: str) -> dict | None:

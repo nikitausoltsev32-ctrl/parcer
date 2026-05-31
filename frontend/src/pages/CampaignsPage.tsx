@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { G } from "../lib/design";
 
@@ -48,6 +49,7 @@ const mono: React.CSSProperties = {
 };
 
 export default function CampaignsPage() {
+  const navigate = useNavigate();
   const { data: campaigns = [], isLoading } = useQuery<Campaign[]>({
     queryKey: ["campaigns"],
     queryFn: () => api.get("/campaigns").then((r) => r.data),
@@ -115,6 +117,7 @@ export default function CampaignsPage() {
                   return (
                     <tr
                       key={c.id}
+                      onClick={() => navigate(`/app/campaigns/${c.id}`)}
                       style={{ cursor: "pointer", transition: "background 0.1s" }}
                       onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.55)"}
                       onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.background = "transparent"}

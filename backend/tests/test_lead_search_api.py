@@ -43,7 +43,15 @@ async def test_post_lead_search_creates_pending_search_log(monkeypatch, client, 
     assert log.search_query_original == "design studios"
     assert log.meta["city"] == "Kazan"
     assert log.meta["progress"]["stage"] == "queued"
-    assert log.meta["progress"]["target"] == 5
+    assert log.meta["progress"]["target"] == 10
+    event = log.meta["events"][0]
+    assert event["stage"] == "queued"
+    assert event["status"] == "queued"
+    assert event["actor"] == "LeadSearchJob"
+    assert event["api"] == "Supabase"
+    assert event["tool"] == "lead_search"
+    assert event["label"] == log.meta["progress"]["label"]
+    assert event["metrics"]["target"] == 10
 
 
 async def test_post_lead_search_caps_target_by_user_quota(monkeypatch, client, db_session):
@@ -153,7 +161,25 @@ async def test_get_lead_search_status_returns_serialized_leads(client, db_sessio
         user_id=user.id,
         search_query_original="design studios",
         outcome="success",
-        meta={"lead_list_id": str(lead_list.id), "list_name": lead_list.name, "saved_leads": 1},
+        meta={
+            "lead_list_id": str(lead_list.id),
+            "list_name": lead_list.name,
+            "saved_leads": 1,
+            "events": [
+                {
+                    "ts": "2026-05-13T00:00:00+00:00",
+                    "stage": "save",
+                    "message": "Saved lead",
+                    "domain": "studio.test",
+                    "status": "completed",
+                    "label": "Saved lead",
+                    "api": "Supabase",
+                    "actor": "SaveAgent",
+                    "tool": "lead_storage",
+                    "metrics": {"saved": 1, "target": 1},
+                }
+            ],
+        },
     )
     db_session.add_all([lead_list, lead, log])
     await db_session.commit()
@@ -170,4 +196,5 @@ async def test_get_lead_search_status_returns_serialized_leads(client, db_sessio
     assert data["leads"][0]["name"] == "Studio One"
     assert data["leads"][0]["description"] == "Studio One designs B2B websites."
     assert data["leads"][0]["score"] == 82
+    assert data["events"] == log.meta["events"]
     assert data["leads"][0]["reason_to_contact"] == "На сайте есть портфолио B2B проектов."

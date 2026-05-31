@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from app.services.llm.base import LLMMessage
 from app.services.llm.factory import get_llm_client
@@ -14,6 +15,24 @@ from app.services.llm.logged import LoggedLLMCall, logged_chat
 from app.services.search.llm_search import _head_validate
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_companies_json(text: str) -> list[dict] | None:
+    """Parse Perplexity response, recovering partial JSON if truncated."""
+    try:
+        return json.loads(text).get("companies", [])
+    except json.JSONDecodeError:
+        pass
+    # Sonar sometimes truncates mid-value; extract all complete objects from the array
+    matches = re.findall(r'\{[^{}]*"website"\s*:\s*"https?://[^"]+[^{}]*\}', text)
+    recovered = []
+    for m in matches:
+        try:
+            recovered.append(json.loads(m))
+        except json.JSONDecodeError:
+            continue
+    return recovered if recovered else None
+
 
 _PROMPT = """\
 Найди {count} реальных действующих компаний из ниши "{niche}" в городе "{city}".
@@ -41,7 +60,7 @@ async def perplexity_search_companies(
             stage="lead_discovery",
             log=dummy_log,
             temperature=0.2,
-            max_tokens=1024,
+            max_tokens=2048,
             timeout=30.0,
         )
     except Exception as exc:
@@ -51,11 +70,9 @@ async def perplexity_search_companies(
     text = (result.content or "").strip()
     if text.startswith("```"):
         text = text.split("```")[1].lstrip("json").strip()
-    try:
-        companies = json.loads(text).get("companies", [])
-        if not isinstance(companies, list):
-            return []
-    except Exception:
+
+    companies = _parse_companies_json(text)
+    if companies is None:
         logger.warning("perplexity_search: bad JSON: %r", text[:200])
         return []
 

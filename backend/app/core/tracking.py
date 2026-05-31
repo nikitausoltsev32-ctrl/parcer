@@ -33,3 +33,11 @@ def click_url(tracking_id: str, destination: str) -> str:
 def unsub_url(tracking_id: str) -> str:
     sig = sign(tracking_id)
     return f"{settings.base_url}/api/v1/t/unsub/{tracking_id}?sig={sig}"
+
+
+def webhook_token(user_id: str) -> str:
+    return sign(f"webhook:{user_id}")
+
+
+def verify_webhook_token(user_id: str, token: str) -> bool:
+    return hmac.compare_digest(webhook_token(user_id), token)

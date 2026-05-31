@@ -13,6 +13,7 @@ from app.api.v1 import (
     templates,
     tracking,
     users,
+    webhooks,
 )
 
 router = APIRouter()
@@ -28,6 +29,7 @@ router.include_router(reminders.router)
 router.include_router(smtp_accounts.router)
 router.include_router(templates.router)
 router.include_router(tracking.router)
+router.include_router(webhooks.router)
 
 
 @router.get("/health")

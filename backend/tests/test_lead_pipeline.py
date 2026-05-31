@@ -70,9 +70,11 @@ async def test_run_lead_search_saves_contact_list_contacts_and_log(monkeypatch, 
     assert log.meta["saved_leads"] == 1
     assert log.meta["progress"]["stage"] == "partial"
     assert log.meta["progress"]["saved"] == 1
+    event_stages = {e["stage"] for e in log.meta.get("events", [])}
+    assert "partial" in event_stages
 
 
-async def test_run_lead_search_fast_mode_fetches_extra_candidates_and_stops_at_target(monkeypatch, db_session):
+async def test_run_lead_search_fast_mode_fetches_extra_candidates_without_capping_target(monkeypatch, db_session):
     user = User(id=uuid.uuid4(), email="fast@test.com", password_hash="hash")
     db_session.add(user)
     await db_session.commit()
@@ -112,8 +114,8 @@ async def test_run_lead_search_fast_mode_fetches_extra_candidates_and_stops_at_t
         fast_mode=True,
     )
 
-    assert result.saved == 5
-    assert limits_seen == [15, 15]
+    assert result.saved == 12
+    assert limits_seen == [50, 50]
 
 
 async def test_run_lead_search_respects_user_leads_quota(monkeypatch, db_session):

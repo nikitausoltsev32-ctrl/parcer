@@ -935,29 +935,40 @@ async def run_lead_search(
                             or raw.get("name")
                             or ""
                         )
-                        light_result = await asyncio.wait_for(
-                            run_light_ai(
-                                title=extracted.get("title", "") or raw.get("name", ""),
-                                meta_description=meta_description,
-                                h1=extracted.get("h1", "") or "",
-                                about_text=extracted.get("about_text", "") or "",
-                                visible_text_snippet=visible_text,
-                                email=contacts["email"],
-                                phone=contacts["phone"],
-                                icp_description=service_offered,
-                                city=clean_city,
-                                log=log,
-                                model_override=ai_model,
-                            ),
-                            timeout=45.0,
-                        )
+                        light_result = None
+                        for attempt in range(3):
+                            try:
+                                light_result = await asyncio.wait_for(
+                                    run_light_ai(
+                                        title=extracted.get("title", "") or raw.get("name", ""),
+                                        meta_description=meta_description,
+                                        h1=extracted.get("h1", "") or "",
+                                        about_text=extracted.get("about_text", "") or "",
+                                        visible_text_snippet=visible_text,
+                                        email=contacts["email"],
+                                        phone=contacts["phone"],
+                                        icp_description=service_offered,
+                                        city=clean_city,
+                                        log=log,
+                                        model_override=ai_model,
+                                    ),
+                                    timeout=45.0,
+                                )
+                                break
+                            except TimeoutError:
+                                if attempt < 2:
+                                    logger.warning("[pipeline] Light AI timeout for %s (attempt %d) — retrying...", domain, attempt + 1)
+                                    await asyncio.sleep(2)
+                                else:
+                                    raise
+                        
                         ai_level = "light"
                         logger.info(
                             "[pipeline] Light AI DONE for %s: score=%d pass_deep=%s hook=%r",
                             domain, light_result.relevance_score, light_result.pass_to_deep_ai, light_result.hook
                         )
                     except TimeoutError:
-                        logger.warning("[pipeline] Light AI timeout for %s — skipping", domain)
+                        logger.warning("[pipeline] Light AI timeout for %s after 3 attempts — skipping", domain)
                         light_result = None
                     except Exception as exc:
                         logger.exception("[pipeline] Light AI ERROR for %s: %s", domain, exc)

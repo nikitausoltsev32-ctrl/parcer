@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.email import send_reset_password_email, send_verify_email
 from app.core.security import (
     create_access_token,
@@ -27,11 +28,13 @@ async def register_user(
     existing = await db.execute(select(User).where(User.email == email.lower()))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Email already registered")
+    default_plan = "dev" if settings.app_env != "production" else "trial"
     user = User(
         id=uuid.uuid4(),
         email=email.lower(),
         password_hash=hash_password(password),
         full_name=full_name,
+        plan=default_plan,
         llm_consent_at=datetime.now(UTC) if llm_consent else None,
     )
     db.add(user)

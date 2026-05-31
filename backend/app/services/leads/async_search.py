@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
 from app.models.lead_processing_log import LeadProcessingLog
 from app.models.user import User
-from app.services.leads.policy import effective_search_limit
 from app.services.leads.pipeline import run_lead_search
+from app.services.leads.policy import effective_search_limit
 
 
 class LeadSearchQuotaExceededError(Exception):
@@ -36,6 +37,17 @@ async def start_lead_search_job(
     )
     if target_limit <= 0:
         raise LeadSearchQuotaExceededError("Lead search quota is exhausted")
+    queued_label = "Поиск поставлен в очередь"
+    queued_metrics = {
+        "percent": 1,
+        "found": 0,
+        "filtered": 0,
+        "crawled": 0,
+        "saved": 0,
+        "target": target_limit,
+        "pages_crawled": 0,
+        "llm_calls": 0,
+    }
     pre_log = LeadProcessingLog(
         id=pre_log_id,
         user_id=user.id,
@@ -62,9 +74,22 @@ async def start_lead_search_job(
                 "llm_calls": 0,
                 "current_domain": None,
             },
-            "events": [{"stage": "queued", "message": "Поиск поставлен в очередь", "domain": None}],
         },
     )
+    pre_log.meta["events"] = [
+        {
+            "ts": datetime.now(UTC).isoformat(),
+            "stage": "queued",
+            "message": queued_label,
+            "domain": None,
+            "status": "queued",
+            "label": pre_log.meta["progress"]["label"],
+            "api": "Supabase",
+            "actor": "LeadSearchJob",
+            "tool": "lead_search",
+            "metrics": queued_metrics,
+        }
+    ]
     db.add(pre_log)
     await db.commit()
 
@@ -106,6 +131,26 @@ async def start_lead_search_job(
                             *list(meta.get("events") or [])[-19:],
                             {"stage": "failed", "message": str(exc)[:180], "domain": None},
                         ]
+                        meta["events"][-1].update(
+                            {
+                                "ts": datetime.now(UTC).isoformat(),
+                                "status": "failed",
+                                "label": progress["label"],
+                                "api": "Supabase",
+                                "actor": "LeadSearchJob",
+                                "tool": "lead_search",
+                                "metrics": {
+                                    "percent": 100,
+                                    "found": progress.get("found", 0),
+                                    "filtered": progress.get("filtered", 0),
+                                    "crawled": progress.get("crawled", 0),
+                                    "saved": progress.get("saved", 0),
+                                    "target": progress.get("target", target_limit),
+                                    "pages_crawled": progress.get("pages_crawled", 0),
+                                    "llm_calls": progress.get("llm_calls", 0),
+                                },
+                            }
+                        )
                         err_log.meta = meta
                         await err_db.commit()
 

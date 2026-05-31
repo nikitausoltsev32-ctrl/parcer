@@ -16,9 +16,34 @@ export interface LeadSearchProgressData {
 
 export interface LeadSearchEvent {
   stage?: string;
+  status?: string;
+  api?: string | null;
+  provider?: string | null;
+  actor?: string | null;
+  agent?: string | null;
+  subagent?: string | null;
   message?: string;
   domain?: string | null;
+  current_domain?: string | null;
   ts?: string;
+}
+
+function eventStatus(event: LeadSearchEvent) {
+  return event.status || event.stage || "pending";
+}
+
+function statusColor(status: string) {
+  if (["success", "done", "completed"].includes(status)) return G.green;
+  if (["failed", "error"].includes(status)) return G.red;
+  if (["partial", "warning"].includes(status)) return G.amber;
+  return G.navyLight;
+}
+
+function shortTime(ts?: string) {
+  if (!ts) return "";
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 export function LeadSearchProgress({
@@ -34,8 +59,9 @@ export function LeadSearchProgress({
   const saved = progress.saved ?? 0;
   const target = progress.target ?? 0;
   const lastEvent = events.length > 0 ? events[events.length - 1] : null;
-  const isDone = ["done", "partial", "failed"].includes(progress.stage ?? "");
+  const isDone = ["done", "success", "partial", "failed"].includes(progress.stage ?? "");
   const barColor = progress.stage === "failed" ? G.red : progress.stage === "partial" ? G.amber : G.green;
+  const timeline = events.slice(-6);
 
   const counters = [
     ["найдено", progress.found ?? 0],
@@ -114,6 +140,82 @@ export function LeadSearchProgress({
           {percent}%
         </span>
       </div>
+
+      {timeline.length > 0 && (
+        <div style={{ marginTop: "10px", borderTop: G.borderSubtle, paddingTop: "9px", display: "flex", flexDirection: "column", gap: "7px" }}>
+          {timeline.map((event, index) => {
+            const status = eventStatus(event);
+            const color = statusColor(status);
+            const api = event.api || event.provider;
+            const actor = event.actor || event.subagent || event.agent;
+            const domain = event.current_domain || event.domain;
+            const message = event.message || event.stage || "Обновление";
+            const time = shortTime(event.ts);
+
+            return (
+              <div
+                key={`${event.ts || "event"}-${event.stage || status}-${index}`}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "12px minmax(0, 1fr)",
+                  columnGap: "8px",
+                  alignItems: "start",
+                  minWidth: 0,
+                }}
+              >
+                <div
+                  style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "999px",
+                    background: color,
+                    marginTop: "5px",
+                    boxShadow: `0 0 0 3px ${color}18`,
+                  }}
+                />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap", minWidth: 0 }}>
+                    <span style={{ fontSize: "11px", fontWeight: 700, color, textTransform: "uppercase", lineHeight: 1.3 }}>
+                      {status}
+                    </span>
+                    {api && (
+                      <span style={{
+                        fontSize: "10.5px",
+                        fontWeight: 700,
+                        color: G.textSecondary,
+                        background: "rgba(26,37,64,0.06)",
+                        border: G.borderDark,
+                        borderRadius: G.radiusXs,
+                        padding: "1px 5px",
+                        lineHeight: 1.35,
+                        maxWidth: "120px",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}>
+                        {api}
+                      </span>
+                    )}
+                    {actor && (
+                      <span style={{ fontSize: "11px", color: G.textMuted, lineHeight: 1.35, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "150px" }}>
+                        {actor}
+                      </span>
+                    )}
+                    {time && (
+                      <span style={{ fontSize: "10.5px", color: G.textMuted, lineHeight: 1.35, marginLeft: "auto" }}>
+                        {time}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: "12px", color: G.textSecondary, lineHeight: 1.4, marginTop: "2px", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {domain ? `${domain}: ${message}` : message}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

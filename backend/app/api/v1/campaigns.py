@@ -1,6 +1,9 @@
+import csv
+import io
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +18,7 @@ from app.models.user import User
 from app.schemas.campaign import (
     CampaignCreate,
     CampaignMessageRead,
+    CampaignMessageUpdate,
     CampaignRead,
     ContactListRead,
 )
@@ -112,6 +116,41 @@ async def list_messages(
     return rows.scalars().all()
 
 
+@router.put("/campaigns/{campaign_id}/messages/{message_id}", response_model=CampaignMessageRead)
+async def update_message(
+    campaign_id: uuid.UUID,
+    message_id: uuid.UUID,
+    body: CampaignMessageUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    row = await db.execute(
+        select(Campaign).where(Campaign.id == campaign_id, Campaign.user_id == user.id)
+    )
+    campaign = row.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    if campaign.status != "pending_approval":
+        raise HTTPException(status_code=400, detail="Can only edit messages before approval")
+
+    row_msg = await db.execute(
+        select(CampaignMessage).where(
+            CampaignMessage.id == message_id, 
+            CampaignMessage.campaign_id == campaign_id
+        )
+    )
+    message = row_msg.scalar_one_or_none()
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    message.subject = body.subject
+    message.body = body.body
+    await db.commit()
+    await db.refresh(message)
+    return message
+
+
 @router.post("/campaigns/{campaign_id}/generate")
 async def generate_campaign(
     campaign_id: uuid.UUID,
@@ -134,6 +173,27 @@ async def generate_campaign(
     return {"status": "generating"}
 
 
+@router.post("/campaigns/{campaign_id}/approve")
+async def approve_campaign(
+    campaign_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    row = await db.execute(
+        select(Campaign).where(Campaign.id == campaign_id, Campaign.user_id == user.id)
+    )
+    campaign = row.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Not found")
+    if campaign.status != "pending_approval":
+        raise HTTPException(status_code=400, detail=f"Cannot approve in status '{campaign.status}'")
+    
+    campaign.status = "approved"
+    await db.commit()
+    return {"status": "approved"}
+
+
+
 @router.post("/campaigns/{campaign_id}/send")
 @limiter.limit("5/minute", key_func=user_or_ip_key)
 async def send_campaign_route(
@@ -150,7 +210,7 @@ async def send_campaign_route(
     campaign = row.scalar_one_or_none()
     if not campaign:
         raise HTTPException(status_code=404, detail="Not found")
-    if campaign.status != "generated":
+    if campaign.status != "approved":
         raise HTTPException(status_code=400, detail=f"Cannot send in status '{campaign.status}'")
 
     rows = await db.execute(
@@ -202,3 +262,50 @@ async def campaign_stats(
     if not campaign:
         raise HTTPException(status_code=404, detail="Not found")
     return campaign.stats
+
+
+@router.get("/campaigns/{campaign_id}/export.csv")
+async def export_campaign_csv(
+    campaign_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    row = await db.execute(
+        select(Campaign).where(Campaign.id == campaign_id, Campaign.user_id == user.id)
+    )
+    campaign = row.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    from app.models.contact import Contact
+
+    rows = await db.execute(
+        select(CampaignMessage, Contact)
+        .join(Contact, CampaignMessage.contact_id == Contact.id)
+        .where(CampaignMessage.campaign_id == campaign_id)
+    )
+    results = rows.all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Contact Name", "Company", "Email", "Phone", "Status", "Subject", "Sent At"])
+
+    for msg, contact in results:
+        company_name = (contact.raw or {}).get("company") or ""
+        sent_at = msg.sent_at.isoformat() if msg.sent_at else ""
+        writer.writerow([
+            contact.contact_name or "",
+            company_name,
+            contact.email or "",
+            contact.phone or "",
+            msg.status,
+            msg.subject or "",
+            sent_at,
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=campaign_{campaign_id}.csv"}
+    )

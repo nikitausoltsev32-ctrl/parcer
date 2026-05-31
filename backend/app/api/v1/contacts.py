@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime
 from typing import Any
@@ -13,6 +14,8 @@ from app.models.activity import Activity
 from app.models.contact import Contact, ContactList
 from app.models.user import User
 from app.services.crm.contact_import import ContactImportError, confirm_contact_import, preview_contact_import
+
+logger = logging.getLogger(__name__)
 
 
 class ContactUpdate(BaseModel):
@@ -167,9 +170,19 @@ async def update_contact(
 ):
     contact = await _get_contact(contact_id, user.id, db)
     updates = body.model_dump(exclude_none=True)
+    status_changed = "status" in updates and updates["status"] != contact.status
+    
     for field, value in updates.items():
         setattr(contact, field, value)
     await db.commit()
+    
+    if status_changed:
+        try:
+            from app.services.crm.sync import sync_to_crm
+            await sync_to_crm(db, str(contact.id), event="status_changed", payload={"new_status": updates["status"]})
+        except Exception:
+            logger.exception("CRM sync failed for contact %s", contact.id)
+
     return {"id": str(contact.id), **updates}
 
 

@@ -60,6 +60,47 @@ async def test_stream_agent_forces_search_when_model_does_not_call_tool(monkeypa
     assert "companies" not in tool_result["result"]
 
 
+async def test_stream_agent_uses_requested_search_limit(monkeypatch, db_session):
+    user = User(id=uuid.uuid4(), email="chat-limit@test.com", password_hash="hash")
+    session = ChatSession(id=uuid.uuid4(), user_id=user.id, title=None)
+    db_session.add_all([user, session])
+    await db_session.commit()
+
+    calls = []
+
+    async def fake_search(args):
+        calls.append(args)
+        return {
+            "status": "pending",
+            "log_id": "11111111-1111-1111-1111-111111111111",
+            "query": args["query"],
+            "city": args["city"],
+            "limit": args["limit"],
+        }
+
+    monkeypatch.setattr("app.services.chat.agent.get_llm_client", lambda task, **kwargs: _NoToolClient())
+    monkeypatch.setitem(agent_module.HANDLERS, "search_companies", fake_search)
+
+    chunks = [
+        chunk
+        async for chunk in stream_agent(
+            db=db_session,
+            session=session,
+            user=user,
+            user_text="найди 10 дизайн-студий в Казани",
+            history=[],
+        )
+    ]
+
+    events = [json.loads(chunk.removeprefix("data: ").strip()) for chunk in chunks]
+    tool_result = next(event for event in events if event["event"] == "tool_result")
+
+    assert calls[0]["query"] == "дизайн-студий"
+    assert calls[0]["city"] == "Казани"
+    assert calls[0]["limit"] == 10
+    assert tool_result["result"]["limit"] == 10
+
+
 async def test_stream_agent_runs_explicit_search_without_calling_llm(monkeypatch, db_session):
     user = User(id=uuid.uuid4(), email="search-no-llm@test.com", password_hash="hash")
     session = ChatSession(id=uuid.uuid4(), user_id=user.id, title=None)

@@ -580,10 +580,10 @@ async def _handle_send_campaign(args: dict[str, Any]) -> dict[str, Any]:
     campaign = row.scalar_one_or_none()
     if not campaign:
         return {"error": "not_found", "message": "Кампания не найдена."}
-    if campaign.status != "generated":
+    if campaign.status != "approved":
         return {
             "error": "wrong_status",
-            "message": f"Кампания в статусе «{campaign.status}», отправка возможна только из статуса «generated».",
+            "message": f"Кампания в статусе «{campaign.status}», отправка возможна только из статуса «approved».",
         }
 
     rows = await db.execute(
@@ -656,7 +656,7 @@ async def _handle_search_companies(args: dict[str, Any]) -> dict[str, Any]:
     query = " ".join(str(args.get("query", "")).split())
     city_value = args.get("city")
     city = " ".join(str(city_value).split()) if city_value else None
-    limit = max(1, min(int(args.get("limit", 5) or 5), 5))
+    limit = max(1, min(int(args.get("limit", 5) or 5), 50))
     list_name = f"{query} {city or ''}".strip() or None
     try:
         log_id = await start_lead_search_job(

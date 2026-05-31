@@ -1,5 +1,6 @@
 """Procrastinate worker entry point."""
 import asyncio
+import logging
 import smtplib
 import ssl
 import uuid
@@ -11,6 +12,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import procrastinate
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _build_html(body: str, open_url: str, unsub_url: str) -> str:
@@ -148,7 +151,7 @@ async def generate_letters(campaign_id: str) -> None:
             stats = dict(campaign.stats or {})
             stats["generated"] = generated
             campaign.stats = stats
-            campaign.status = "generated"
+            campaign.status = "pending_approval"
             await db.commit()
         except Exception as e:
             campaign.status = "failed"
@@ -161,7 +164,7 @@ async def generate_letters(campaign_id: str) -> None:
 
 @app.task(queue="default", retry=procrastinate.RetryStrategy(max_attempts=3))
 async def send_email(message_id: str) -> None:
-    from sqlalchemy import select
+    from sqlalchemy import select, text
 
     from app.core.database import AsyncSessionLocal
     from app.core.fernet import decrypt_password
@@ -201,6 +204,20 @@ async def send_email(message_id: str) -> None:
         )
         if supp.scalar_one_or_none():
             msg.status = "suppressed"
+            await db.commit()
+            return
+
+        user_row = await db.execute(
+            text(
+                'UPDATE users SET sends_quota = sends_quota - 1 '
+                'WHERE id = :uid AND sends_quota > 0 '
+                'RETURNING sends_quota'
+            ),
+            {'uid': str(campaign.user_id)},
+        )
+        if user_row.fetchone() is None:
+            msg.status = "failed"
+            msg.error = "sends_quota_exceeded"
             await db.commit()
             return
 
@@ -248,10 +265,23 @@ async def send_email(message_id: str) -> None:
 
             msg.status = "sent"
             msg.sent_at = datetime.now(UTC)
+            
+            try:
+                from app.services.crm.sync import sync_to_crm
+                await sync_to_crm(db, str(contact.id), event="email_sent", payload={"subject": msg.subject, "body": plain_body})
+            except Exception:
+                logger.exception("CRM sync failed for contact %s", contact.id)
+
             stats = dict(campaign.stats or {})
             stats["sent"] = stats.get("sent", 0) + 1
             campaign.stats = stats
         except Exception as e:
+            # Отправка не удалась — возвращаем списанную квоту, чтобы платный
+            # лимит не сгорал на неуспешных отправках.
+            await db.execute(
+                text('UPDATE users SET sends_quota = sends_quota + 1 WHERE id = :uid'),
+                {'uid': str(campaign.user_id)},
+            )
             msg.status = "failed"
             msg.error = str(e)
             stats = dict(campaign.stats or {})

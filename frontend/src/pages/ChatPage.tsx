@@ -13,16 +13,13 @@ interface ChatModel {
   sub: string;
 }
 
-const DEFAULT_MODELS: ChatModel[] = [
-  { id: "nvidia/z-ai/glm-5.1", label: "GLM 5.1", sub: "NVIDIA" },
-  { id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", label: "Nemotron 3 Nano Omni 30B", sub: "NVIDIA reasoning" },
-];
-
 interface ToolStep {
   id: string;
   label: string;
   done: boolean;
   warning?: boolean;
+  toolName?: string;
+  toolCallId?: string;
 }
 
 interface Company extends LeadReportItem {
@@ -458,8 +455,8 @@ export default function ChatPage() {
   const [activeTabId, setActiveTabId] = useState(1);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [models, setModels] = useState<ChatModel[]>(DEFAULT_MODELS);
-  const [selectedModel, setSelectedModel] = useState<ChatModel | null>(DEFAULT_MODELS[0]);
+  const [models, setModels] = useState<ChatModel[]>([]);
+  const [selectedModel, setSelectedModel] = useState<ChatModel | null>(null);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
   const bottomRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -491,13 +488,42 @@ export default function ChatPage() {
     api.get<ChatModel[]>("/chat/models")
       .then((res) => {
         if (!alive) return;
-        const next = Array.isArray(res.data) && res.data.length > 0 ? res.data : DEFAULT_MODELS;
+        const next = Array.isArray(res.data) ? res.data : [];
         setModels(next);
         setSelectedModel((current) => next.find((m) => m.id === current?.id) ?? next[0] ?? null);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!alive) return;
+        setModels([]);
+        setSelectedModel(null);
+      });
     return () => { alive = false; };
   }, []);
+
+  function toolLabel(name: string) {
+    return name.replace(/_/g, " ");
+  }
+
+  function upsertToolStep(steps: ToolStep[], toolName: string, done: boolean, toolCallId?: string) {
+    const existing = steps.findIndex((step) =>
+      (toolCallId && step.toolCallId === toolCallId) || step.toolName === toolName
+    );
+    if (existing >= 0) {
+      steps[existing] = {
+        ...steps[existing],
+        done: steps[existing].done || done,
+        toolCallId: steps[existing].toolCallId ?? toolCallId,
+      };
+      return;
+    }
+    steps.push({
+      id: toolCallId || `${toolName}-${Date.now()}-${steps.length}`,
+      label: toolLabel(toolName),
+      done,
+      toolName,
+      toolCallId,
+    });
+  }
 
   function updateTab(id: number, updater: (t: Tab) => Tab) {
     setTabs((prev) => prev.map((t) => (t.id === id ? updater(t) : t)));
@@ -535,7 +561,7 @@ export default function ChatPage() {
     let lastEvents: LeadSearchEvent[] = [];
 
     for (let attempt = 0; attempt < 240; attempt += 1) {
-      await sleep(2500);
+      await sleep(1000);
       try {
         const { data } = await api.get(`/lead-search/${logId}`);
         const status = data.status as LeadSearchJob["status"];
@@ -561,7 +587,7 @@ export default function ChatPage() {
                 ? {
                     ...m,
                     pending: true,
-                    content: lastProgress?.label || (saved > 0 ? `Обрабатываю, уже сохранено ${saved}.` : "Запускаю AI-поиск."),
+                    content: lastProgress?.label || (saved > 0 ? `Идет поиск: уже сохранено ${saved}.` : "Идет поиск..."),
                     companies: lastLeads.length > 0 ? lastLeads : m.companies,
                     leadSearch: { logId, status, saved, listName, progress: lastProgress, events: lastEvents },
                   }
@@ -633,7 +659,7 @@ export default function ChatPage() {
               ...m,
               pending: false,
               content: lastLeads.length > 0
-                ? `Найдено ${lastSaved} компаний${lastListName ? ` в "${lastListName}"` : ""}. Поиск может продолжаться в фоне.`
+                ? `Найдено ${lastSaved} компаний${lastListName ? ` в "${lastListName}"` : ""}.`
                 : "Поиск занял слишком много времени. Результаты могут появиться позже в разделе Контакты.",
               companies: lastLeads.length > 0 ? lastLeads : undefined,
               leadSearch: {
@@ -669,13 +695,14 @@ export default function ChatPage() {
       messages: [...t.messages, userMsg, assistantMsg],
     }));
 
+    let leadSearch: LeadSearchJob | undefined;
+
     try {
       const sid = await getOrCreateSession(currentTabId);
       const token = getToken();
       let accumulated = "";
       const toolSteps: ToolStep[] = [];
       let companies: Company[] | undefined;
-      let leadSearch: LeadSearchJob | undefined;
       let importResult: ImportToolResult | undefined;
 
       await streamSSE(
@@ -697,15 +724,26 @@ export default function ChatPage() {
                 ...t,
                 messages: t.messages.map((m) =>
                   m.id === assistantId
-                    ? { ...m, content: accumulated, pending: false, ...(leadSearch ? { leadSearch } : {}) }
+                    ? { ...m, content: accumulated, pending: leadSearch?.status === "pending", ...(leadSearch ? { leadSearch } : {}) }
                     : m
+                ),
+              }));
+            } else if (data.event === "tool_calls") {
+              const calls = Array.isArray(data.tool_calls) ? data.tool_calls : [];
+              calls.forEach((call: { id?: unknown; name?: unknown }) => {
+                if (typeof call.name === "string") {
+                  upsertToolStep(toolSteps, call.name, false, typeof call.id === "string" ? call.id : undefined);
+                }
+              });
+              updateTab(currentTabId, (t) => ({
+                ...t,
+                messages: t.messages.map((m) =>
+                  m.id === assistantId ? { ...m, toolSteps: [...toolSteps], pending: true } : m
                 ),
               }));
             } else if (data.event === "tool_result") {
               const toolName: string = data.name ?? "tool";
-              const stepId = String(Date.now());
-              const label = toolName.replace(/_/g, " ");
-              toolSteps.push({ id: stepId, label, done: true });
+              upsertToolStep(toolSteps, toolName, true, typeof data.id === "string" ? data.id : undefined);
 
               const payload = data.result as ({ companies?: unknown } | unknown[] | undefined);
               const resultObject = data.result as Record<string, unknown> | undefined;
@@ -740,7 +778,7 @@ export default function ChatPage() {
                       ? {
                           ...m,
                           pending: true,
-                          content: "Поиск поставлен в очередь.",
+                          content: "Идет поиск...",
                           toolSteps: [...toolSteps],
                           leadSearch,
                         }
@@ -767,14 +805,18 @@ export default function ChatPage() {
               updateTab(currentTabId, (t) => ({
                 ...t,
                 messages: t.messages.map((m) =>
-                  m.id === assistantId ? { ...m, toolSteps: [...toolSteps], companies, leadSearch, importResult } : m
+                  m.id === assistantId
+                    ? { ...m, toolSteps: [...toolSteps], companies, leadSearch, importResult, pending: leadSearch?.status === "pending" ? true : m.pending }
+                    : m
                 ),
               }));
             } else if (data.event === "error") {
               updateTab(currentTabId, (t) => ({
                 ...t,
                 messages: t.messages.map((m) =>
-                  m.id === assistantId ? { ...m, content: `Ошибка: ${data.message}`, pending: false } : m
+                  m.id === assistantId
+                    ? { ...m, content: `Ошибка: ${data.message}`, pending: leadSearch?.status === "pending", ...(leadSearch ? { leadSearch } : {}) }
+                    : m
                 ),
               }));
             }
@@ -785,7 +827,14 @@ export default function ChatPage() {
       updateTab(currentTabId, (t) => ({
         ...t,
         messages: t.messages.map((m) =>
-          m.id === assistantId ? { ...m, content: "Не удалось получить ответ. Попробуйте снова.", pending: false } : m
+          m.id === assistantId
+            ? {
+                ...m,
+                content: leadSearch?.status === "pending" ? "Идет поиск..." : "Не удалось получить ответ. Попробуйте снова.",
+                pending: leadSearch?.status === "pending",
+                ...(leadSearch ? { leadSearch } : {}),
+              }
+            : m
         ),
       }));
     } finally {
@@ -948,7 +997,7 @@ export default function ChatPage() {
               />
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isMobile ? "2px 10px 10px" : "4px 14px 12px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  {!isMobile && <ModelSelector models={models} value={selectedModel} onChange={setSelectedModel} />}
+                  <ModelSelector models={models} value={selectedModel} onChange={setSelectedModel} />
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={loading}

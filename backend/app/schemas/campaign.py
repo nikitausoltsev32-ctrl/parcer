@@ -37,6 +37,11 @@ class CampaignMessageRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class CampaignMessageUpdate(BaseModel):
+    subject: str
+    body: str
+
+
 class ContactListRead(BaseModel):
     id: uuid.UUID
     name: str
