@@ -31,6 +31,14 @@ def test_available_chat_models_excludes_dead_minimax_option(monkeypatch):
     assert is_available_model_override("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning") is True
 
 
+def test_available_chat_models_returns_empty_list_without_nvidia_key(monkeypatch):
+    monkeypatch.setattr(settings, "nvidia_api_key", "")
+
+    assert get_available_chat_models() == []
+    assert is_available_model_override("nvidia/z-ai/glm-5.1") is False
+    assert is_available_model_override("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning") is False
+
+
 def test_nemotron_override_uses_nvidia_reasoning_client(monkeypatch):
     monkeypatch.setattr(settings, "nvidia_api_key", "test-nvidia-key")
 
@@ -38,3 +46,12 @@ def test_nemotron_override_uses_nvidia_reasoning_client(monkeypatch):
 
     assert client.model == "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
     assert client._extra_body() == {"chat_template_kwargs": {"enable_thinking": True, "reasoning_budget": 512}}
+
+
+def test_openrouter_client_uses_openrouter_base_and_key(monkeypatch):
+    from app.services.llm.openrouter import OpenRouterClient
+    monkeypatch.setattr(settings, "openrouter_api_key", "or-test-key")
+    client = OpenRouterClient(model="deepseek/deepseek-chat")
+    assert client.base_url == "https://openrouter.ai/api/v1"
+    assert client.api_key == "or-test-key"
+    assert client.model == "deepseek/deepseek-chat"
