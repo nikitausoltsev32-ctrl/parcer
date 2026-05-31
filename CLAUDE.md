@@ -148,7 +148,8 @@ STEP 1 — Query Generator
   Вход: 1 запрос → Выход: 5–15 поисковых вариантов + negative keywords
       ↓
 STEP 2 — Search Module
-  API: SerpAPI + Yandex Search API
+  API: SerpAPI + Yandex Search API + Perplexity Sonar (LLM live web discovery, если OPENROUTER_API_KEY задан)
+  Perplexity Sonar ищет компании напрямую по живому вебу (не из памяти модели); fallback — nvidia GLM.
   Выход: ~200 URL | Cache TTL: 7 дней (key: sha256(query+region))
       ↓
 STEP 3 — URL Filter (детерминированный, без LLM)
@@ -344,17 +345,22 @@ AI_CREDIT_COSTS = {
 | Outreach | шаблонное | шаблонное | Sonnet 4.6 | Sonnet 4.6 |
 | Premium AI | ❌ | ❌ | ❌ | GLM-5 / Sonnet 4.6 |
 
-### Dev/MVP (текущий статус)
-```
-LLM_CHAT_PROVIDER=nvidia
-LLM_CHAT_MODEL=z-ai/glm-5.1
-LLM_LETTERS_PROVIDER=nvidia
-LLM_LETTERS_MODEL=z-ai/glm-5.1
-LLM_CLASSIFY_PROVIDER=nvidia
-LLM_CLASSIFY_MODEL=z-ai/glm-5.1
-LLM_ENRICH_PROVIDER=nvidia
-LLM_ENRICH_MODEL=z-ai/glm-5.1
-```
+### Dev/MVP — текущий роутинг по стадиям
+
+Источник правды — `backend/app/services/llm/routing.py` (`STAGE_ROUTING`).
+Без OpenRouter-ключа все стадии падают в fallback nvidia GLM-5.1.
+
+| Стадия | С OpenRouter-ключом | Fallback (без ключа) |
+|--------|---------------------|----------------------|
+| `query_gen` | google/gemini-2.0-flash-001 via OpenRouter | nvidia GLM-5.1 |
+| `url_classify` | google/gemini-2.0-flash-8b via OpenRouter | groq llama-3.3-70b → nvidia GLM-5.1 |
+| `light_ai` | deepseek/deepseek-chat via OpenRouter | nvidia GLM-5.1 |
+| `deep_ai` | deepseek/deepseek-chat via OpenRouter | nvidia GLM-5.1 |
+| `outreach` | deepseek/deepseek-chat via OpenRouter | nvidia GLM-5.1 |
+| `inbox_classify` | google/gemini-2.0-flash-8b via OpenRouter | nvidia GLM-5.1 |
+| `lead_discovery` | perplexity/sonar via OpenRouter | nvidia GLM-5.1 |
+
+Легаси-таски (`chat`, `letters`, `classify`, `enrich`) по-прежнему читают `settings.llm_<task>_*`.
 
 **Правило:** free tiers Groq/Gemini/GLM — только для Free-тарифа и MVP. Для платных тарифов — только платные API.
 
@@ -363,6 +369,7 @@ LLM_ENRICH_MODEL=z-ai/glm-5.1
 - GLM direct: `https://open.bigmodel.cn/api/paas/v4`
 - Groq: `https://api.groq.com/openai/v1`
 - Qwen: `https://dashscope.aliyuncs.com/compatible-mode/v1`
+- OpenRouter: `https://openrouter.ai/api/v1`
 
 ---
 
@@ -666,17 +673,17 @@ Light AI обработано:         500
 | Tracking (pixel, click, unsub) | `api/v1/tracking.py`, `core/tracking.py` |
 | Inbox poll + AI-классификация | `workers/main.py:poll_inbox,classify_inbox_message` |
 | CSV-импорт контактов | `services/crm/contact_import.py` |
-| Lead search pipeline: Query Gen, Search, URL Filter, URL Classifier для border cases, Cache, Crawler, HTML Extraction, Light/Deep AI, Validation, Scoring, optional Outreach, Observability | `services/leads/pipeline.py`, `services/leads/*`, `services/llm/logged.py` |
+| Lead search pipeline: Query Gen, Search (SerpAPI + Perplexity Sonar), URL Filter, URL Classifier, Cache, Crawler, HTML Extraction, Light/Deep AI, Validation, Scoring, optional Outreach, Observability | `services/leads/pipeline.py`, `services/leads/*`, `services/llm/logged.py` |
+| LLM роутинг по стадиям (STAGE_ROUTING + OpenRouter + Perplexity fallback) | `services/llm/routing.py`, `services/llm/factory.py`, `services/search/perplexity_search.py` |
 | AI Credits: баланс пользователя + атомарный check/deduct перед дорогими LLM-вызовами | `services/credits.py`, `models/user.py` |
 | Companies / Contacts / Campaigns / Templates / SMTP API | `api/v1/*.py` |
+| run_followup, run_reminders (по расписанию) | `workers/main.py` |
 | Periodic cleanup пустых списков | `workers/main.py:cleanup_empty_contact_lists` |
 | Fernet-шифрование SMTP-паролей | `core/fernet.py` |
 
 ### Заглушки / не реализовано
 | Что | Где | Приоритет |
 |-----|-----|-----------|
-| `run_followup` | `workers/main.py:349` | Высокий |
-| `run_reminders` | `workers/main.py:354` | Высокий |
 | Тарифные лимиты/квоты для lead pipeline вынести в config/service | частично в коде | Высокий |
 | Квоты leads_quota / sends_quota полностью провести по workflow | частично в коде | Высокий |
 | Карточка контакта `/app/contacts/:id` | нет | Средний |
