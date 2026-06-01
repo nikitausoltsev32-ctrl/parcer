@@ -54,8 +54,10 @@ export default function CampaignPage() {
     queryKey: ["campaign", id],
     queryFn: () => api.get(`/campaigns`).then((r) => r.data.find((c: Campaign) => c.id === id)),
     enabled: !!id,
-    refetchInterval: (data) => 
-      data?.status === "generating" || data?.status === "sending" ? 2000 : false,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "generating" || status === "sending" ? 2000 : false;
+    },
   });
 
   const { data: messages = [] } = useQuery<CampaignMessage[]>({

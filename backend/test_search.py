@@ -1,4 +1,5 @@
 """Quick smoke test: run lead search and report timing, model routing, results."""
+import argparse
 import asyncio
 import time
 import uuid
@@ -22,6 +23,14 @@ def print_routing():
 
 
 async def main():
+    parser = argparse.ArgumentParser(description="Run a real lead-search smoke test.")
+    parser.add_argument("--query", default="стоматологии")
+    parser.add_argument("--city", default="Екатеринбург")
+    parser.add_argument("--limit", type=int, default=5)
+    parser.add_argument("--list-name", default=None)
+    parser.add_argument("--full-mode", action="store_true")
+    args = parser.parse_args()
+
     print_routing()
 
     url = settings.database_url.replace("?pgbouncer=true", "").replace("&pgbouncer=true", "")
@@ -50,11 +59,14 @@ async def main():
                 user.leads_quota = 10_000
                 user.ai_credits_balance = 100_000
                 await db.commit()
-            print(f"\nПользователь: {user.email} | plan={user.plan} quota={user.leads_quota} credits={user.ai_credits_balance}")
+            print(
+                f"\nПользователь: {user.email} | plan={user.plan} "
+                f"quota={user.leads_quota} credits={user.ai_credits_balance}"
+            )
 
-        query = "стоматологии"
-        city = "Екатеринбург"
-        limit = 5
+        query = args.query
+        city = args.city
+        limit = max(1, min(args.limit, 50))
 
         log_id = uuid.uuid4()
         pre_log = LeadProcessingLog(
@@ -78,10 +90,10 @@ async def main():
                 query=query,
                 city=city,
                 limit=limit,
-                list_name=f"Test {query} {city}",
+                list_name=args.list_name or f"Test {query} {city}",
                 generate_outreach_messages=False,
                 pre_log_id=log_id,
-                fast_mode=True,
+                fast_mode=not args.full_mode,
             )
             elapsed = time.monotonic() - t0
             print(f"\nГотово за {elapsed:.1f}с | сохранено: {result.saved}/{limit}")
@@ -93,21 +105,35 @@ async def main():
         log = await db.get(LeadProcessingLog, log_id)
         if log and log.meta:
             p = log.meta.get("progress", {})
-            print(f"Стадия: {p.get('stage')} | найдено URL: {log.urls_found} | после фильтра: {log.urls_after_filter}")
-            print(f"Краулинг: {log.urls_crawled} сайтов | LLM-вызовов: {len(log.llm_calls or [])} | cost: ${log.total_cost_usd:.4f}")
+            print(
+                f"Стадия: {p.get('stage')} | найдено URL: {log.urls_found} "
+                f"| после фильтра: {log.urls_after_filter}"
+            )
+            print(
+                f"Краулинг: {log.urls_crawled} сайтов | "
+                f"LLM-вызовов: {len(log.llm_calls or [])} | cost: ${log.total_cost_usd:.4f}"
+            )
             events = log.meta.get("events", [])
             if events:
                 print("\nСобытия пайплайна:")
                 for e in events:
                     print(f"  [{e['stage']:12}] {e['message']}")
 
-        leads_res = await db.execute(select(Lead).where(Lead.user_id == user_id).order_by(Lead.created_at.desc()).limit(limit))
+        leads_res = await db.execute(
+            select(Lead)
+            .where(Lead.user_id == user_id)
+            .order_by(Lead.created_at.desc())
+            .limit(limit)
+        )
         leads = leads_res.scalars().all()
         print(f"\n=== Лиды ({len(leads)}) ===")
         for lead in leads:
             score = (lead.lead_fit or {}).get("score", "?")
             ai_level = (lead.processing or {}).get("ai_level", "?")
-            print(f"  [{score:>3}] {lead.company_name or lead.domain:<30} {lead.phone or '':>16}  {lead.email or '':<25}  ai={ai_level}")
+            print(
+                f"  [{score:>3}] {lead.company_name or lead.domain:<30} "
+                f"{lead.phone or '':>16}  {lead.email or '':<25}  ai={ai_level}"
+            )
 
 
 if __name__ == "__main__":

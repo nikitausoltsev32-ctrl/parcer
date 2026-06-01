@@ -13,8 +13,6 @@ from inspect import signature
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
-logger = logging.getLogger(__name__)
-
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,9 +22,13 @@ from app.models.user import User
 from app.services.credits import AI_CREDIT_COSTS, InsufficientCreditsError, check_and_deduct
 from app.services.leads.cache import domain_content_hash, get_cached_lead
 from app.services.leads.crawler import crawl_website
-from app.services.leads.deep_ai import run_deep_ai
 from app.services.leads.dedup import deduplicate_candidates
-from app.services.leads.extraction import extract_public_contacts, normalize_domain, normalize_website
+from app.services.leads.deep_ai import run_deep_ai
+from app.services.leads.extraction import (
+    extract_public_contacts,
+    normalize_domain,
+    normalize_website,
+)
 from app.services.leads.html_extraction import extract_from_html
 from app.services.leads.light_ai import run_light_ai
 from app.services.leads.outreach import generate_outreach
@@ -37,6 +39,8 @@ from app.services.leads.url_classifier import classify_url
 from app.services.leads.url_filter import filter_urls, is_blocked_domain, is_blocked_path
 from app.services.llm.logged import LoggedLLMCall
 from app.services.search import search_companies
+
+logger = logging.getLogger(__name__)
 
 ANTI_LOSS_RULES = {
     "deep_ai_requires_light_ai_pass": True,

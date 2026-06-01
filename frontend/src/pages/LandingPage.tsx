@@ -1,5 +1,4 @@
 import { useNavigate } from "react-router-dom";
-import { G } from "../lib/design";
 
 export default function LandingPage() {
   const navigate = useNavigate();

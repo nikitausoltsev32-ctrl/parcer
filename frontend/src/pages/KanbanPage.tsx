@@ -10,7 +10,7 @@ interface Contact {
   status: string;
   email: string | null;
   phone: string | null;
-  enrichment: any;
+  enrichment: Record<string, unknown> | null;
 }
 
 const COLUMNS = [

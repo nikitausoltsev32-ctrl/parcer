@@ -268,7 +268,12 @@ async def send_email(message_id: str) -> None:
             
             try:
                 from app.services.crm.sync import sync_to_crm
-                await sync_to_crm(db, str(contact.id), event="email_sent", payload={"subject": msg.subject, "body": plain_body})
+                await sync_to_crm(
+                    db,
+                    str(contact.id),
+                    event="email_sent",
+                    payload={"subject": msg.subject, "body": plain_body},
+                )
             except Exception:
                 logger.exception("CRM sync failed for contact %s", contact.id)
 

@@ -222,8 +222,8 @@ Studio One designs B2B websites, product identities, and launch campaigns for te
 
 
 async def test_perplexity_search_parses_and_tags_source(monkeypatch):
-    from app.services.search import perplexity_search as ps
     from app.services.llm.base import LLMResult
+    from app.services.search import perplexity_search as ps
 
     async def fake_logged_chat(*args, **kwargs):
         return LLMResult(
