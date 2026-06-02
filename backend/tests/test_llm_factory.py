@@ -21,22 +21,59 @@ def test_available_chat_models_excludes_dead_minimax_option(monkeypatch):
     models = get_available_chat_models()
 
     assert models == [
-        {"id": "nvidia/z-ai/glm-5.1", "label": "GLM 5.1", "sub": "NVIDIA"},
+        {
+            "id": "openrouter/openai/gpt-4o-mini",
+            "label": "GPT-4o mini",
+            "sub": "OpenRouter · основной",
+            "provider": "openrouter",
+        },
+        {
+            "id": "openrouter/google/gemini-2.5-flash-lite",
+            "label": "Gemini 2.5 Flash Lite",
+            "sub": "OpenRouter · быстрый",
+            "provider": "openrouter",
+        },
+        {"id": "nvidia/z-ai/glm-5.1", "label": "GLM 5.1", "sub": "NVIDIA", "provider": "nvidia"},
         {
             "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
             "label": "Nemotron 3 Nano Omni 30B",
             "sub": "NVIDIA reasoning",
+            "provider": "nvidia",
         },
     ]
+    assert is_available_model_override("openrouter/openai/gpt-4o-mini") is True
     assert is_available_model_override("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning") is True
 
 
-def test_available_chat_models_returns_empty_list_without_nvidia_key(monkeypatch):
+def test_available_chat_models_returns_openrouter_models_without_nvidia_key(monkeypatch):
     monkeypatch.setattr(settings, "nvidia_api_key", "")
+    monkeypatch.setattr(settings, "openrouter_api_key", "or-key")
 
-    assert get_available_chat_models() == []
+    assert get_available_chat_models() == [
+        {
+            "id": "openrouter/openai/gpt-4o-mini",
+            "label": "GPT-4o mini",
+            "sub": "OpenRouter · основной",
+            "provider": "openrouter",
+        },
+        {
+            "id": "openrouter/google/gemini-2.5-flash-lite",
+            "label": "Gemini 2.5 Flash Lite",
+            "sub": "OpenRouter · быстрый",
+            "provider": "openrouter",
+        },
+    ]
+    assert is_available_model_override("openrouter/openai/gpt-4o-mini") is True
     assert is_available_model_override("nvidia/z-ai/glm-5.1") is False
     assert is_available_model_override("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning") is False
+
+
+def test_available_chat_models_returns_empty_list_without_any_model_key(monkeypatch):
+    monkeypatch.setattr(settings, "nvidia_api_key", "")
+    monkeypatch.setattr(settings, "openrouter_api_key", "")
+
+    assert get_available_chat_models() == []
+    assert is_available_model_override("openrouter/openai/gpt-4o-mini") is False
 
 
 def test_nemotron_override_uses_nvidia_reasoning_client(monkeypatch):

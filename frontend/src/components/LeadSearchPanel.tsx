@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { Brain, ChevronDown, Search } from "lucide-react";
 import { api } from "../lib/api";
 import { LeadSearchProgress, type LeadSearchEvent, type LeadSearchProgressData } from "./LeadSearchProgress";
 
@@ -22,9 +23,12 @@ interface ChatModel {
   id: string;
   label: string;
   sub: string;
+  provider?: string;
 }
 
 const DEFAULT_MODELS: ChatModel[] = [
+  { id: "openrouter/openai/gpt-4o-mini", label: "GPT-4o mini", sub: "OpenRouter · основной", provider: "openrouter" },
+  { id: "openrouter/google/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite", sub: "OpenRouter · быстрый", provider: "openrouter" },
   { id: "nvidia/z-ai/glm-5.1", label: "GLM 5.1", sub: "NVIDIA" },
   { id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", label: "Nemotron 3 Nano Omni 30B", sub: "NVIDIA reasoning" },
 ];
@@ -134,6 +138,7 @@ export function LeadSearchPanel() {
   const isRunning = startMutation.isPending || searchStatus === "pending";
   const disabled = !query.trim() || !selectedModelId || isRunning;
   const isError = searchStatus === "failed";
+  const selectedModel = models.find((model) => model.id === selectedModelId) ?? null;
 
   function handleStart() {
     setSearchStatus("idle");
@@ -156,7 +161,7 @@ export function LeadSearchPanel() {
         flexShrink: 0,
       }}
     >
-      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: "10px", alignItems: "stretch", flexWrap: "wrap" }}>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -180,25 +185,49 @@ export function LeadSearchPanel() {
             fontSize: "13px", fontFamily: "inherit", outline: "none", padding: "0 12px",
           }}
         />
-        <select
-          value={selectedModelId}
-          disabled={isRunning || models.length === 0}
-          onChange={(e) => setSelectedModelId(e.target.value)}
-          title="AI model"
+        <label
           style={{
-            height: "34px", width: "230px",
-            borderRadius: UI.radiusSm, border: UI.border,
-            background: "rgba(255,255,255,0.65)", color: UI.textPrimary,
-            fontSize: "13px", fontFamily: "inherit", outline: "none", padding: "0 10px",
-            cursor: isRunning || models.length === 0 ? "not-allowed" : "pointer",
+            minWidth: "260px",
+            flex: "0 1 300px",
+            height: "42px",
+            display: "flex",
+            alignItems: "center",
+            gap: "9px",
+            padding: "0 10px",
+            borderRadius: UI.radiusSm,
+            border: UI.border,
+            background: "rgba(255,255,255,0.66)",
+            position: "relative",
           }}
         >
-          {models.map((model) => (
-            <option key={model.id} value={model.id}>
-              {model.label} · {model.sub}
-            </option>
-          ))}
-        </select>
+          <Brain size={15} strokeWidth={2} color={UI.navy} style={{ flexShrink: 0 }} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: "10.5px", fontWeight: 700, color: UI.textMuted, lineHeight: 1.1 }}>Модель поиска</div>
+            <div style={{ fontSize: "12.5px", fontWeight: 700, color: UI.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {selectedModel ? `${selectedModel.label} · ${selectedModel.sub}` : "Модели не настроены"}
+            </div>
+          </div>
+          <ChevronDown size={14} strokeWidth={2.2} color={UI.textMuted} style={{ flexShrink: 0 }} />
+          <select
+            value={selectedModelId}
+            disabled={isRunning || models.length === 0}
+            onChange={(e) => setSelectedModelId(e.target.value)}
+            aria-label="Модель поиска"
+            title="Модель поиска"
+            style={{
+              position: "absolute",
+              inset: 0,
+              opacity: 0,
+              cursor: isRunning || models.length === 0 ? "not-allowed" : "pointer",
+            }}
+          >
+            {models.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.label} · {model.sub}
+              </option>
+            ))}
+          </select>
+        </label>
         <button
           disabled={disabled}
           onClick={handleStart}
@@ -210,8 +239,12 @@ export function LeadSearchPanel() {
             fontSize: "13px", fontWeight: 600, fontFamily: "inherit",
             cursor: disabled ? "not-allowed" : "pointer",
             boxShadow: disabled ? "none" : UI.shadowBtn,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "7px",
           }}
         >
+          <Search size={14} strokeWidth={2.2} />
           {isRunning ? "Ищем..." : "Найти лиды"}
         </button>
       </div>

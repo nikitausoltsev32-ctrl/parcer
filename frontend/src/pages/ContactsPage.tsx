@@ -209,8 +209,9 @@ export default function ContactsPage() {
     <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
       {/* Header */}
       <div style={{
-        height: "52px", display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 24px",
+        minHeight: "52px", display: "flex", alignItems: "center", justifyContent: "space-between",
+        gap: "10px", flexWrap: "wrap",
+        padding: "8px 24px",
         background: "rgba(255,255,255,0.45)",
         backdropFilter: G.blur, WebkitBackdropFilter: G.blur,
         borderBottom: G.borderSubtle, flexShrink: 0,
@@ -219,7 +220,7 @@ export default function ContactsPage() {
           <span style={{ fontSize: "14px", fontWeight: 700, color: G.textPrimary }}>Контакты</span>
           <span style={{ fontSize: "13px", color: G.textMuted }}>{contacts.length} записей</span>
         </div>
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end", minWidth: 0 }}>
           {/* Search */}
           <div style={{
             display: "flex", alignItems: "center", gap: "8px",
@@ -227,6 +228,8 @@ export default function ContactsPage() {
             background: "rgba(255,255,255,0.60)",
             backdropFilter: "blur(8px)",
             border: G.border,
+            minWidth: "160px",
+            flex: "1 1 180px",
           }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={G.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -237,7 +240,8 @@ export default function ContactsPage() {
               placeholder="Поиск..."
               style={{
                 border: "none", outline: "none", background: "transparent",
-                fontSize: "13px", color: G.textPrimary, fontFamily: "inherit", width: "160px",
+                fontSize: "13px", color: G.textPrimary, fontFamily: "inherit", width: "100%",
+                minWidth: 0,
               }}
             />
           </div>

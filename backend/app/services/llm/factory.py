@@ -17,6 +17,22 @@ _OPENAI_PROVIDERS = {
 
 CHAT_MODEL_OPTIONS = [
     {
+        "id": "openrouter/openai/gpt-4o-mini",
+        "label": "GPT-4o mini",
+        "sub": "OpenRouter · основной",
+        "provider": "openrouter",
+        "model": "openai/gpt-4o-mini",
+        "api_key_setting": "openrouter_api_key",
+    },
+    {
+        "id": "openrouter/google/gemini-2.5-flash-lite",
+        "label": "Gemini 2.5 Flash Lite",
+        "sub": "OpenRouter · быстрый",
+        "provider": "openrouter",
+        "model": "google/gemini-2.5-flash-lite",
+        "api_key_setting": "openrouter_api_key",
+    },
+    {
         "id": "nvidia/z-ai/glm-5.1",
         "label": "GLM 5.1",
         "sub": "NVIDIA",
@@ -40,7 +56,12 @@ _CHAT_MODEL_BY_ID = {option["id"]: option for option in CHAT_MODEL_OPTIONS}
 
 def get_available_chat_models() -> list[dict[str, str]]:
     return [
-        {"id": option["id"], "label": option["label"], "sub": option["sub"]}
+        {
+            "id": option["id"],
+            "label": option["label"],
+            "sub": option["sub"],
+            "provider": option["provider"],
+        }
         for option in CHAT_MODEL_OPTIONS
         if getattr(settings, option["api_key_setting"], "")
     ]

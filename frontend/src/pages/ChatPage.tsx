@@ -5,12 +5,13 @@ import { streamSSE } from "../lib/sse";
 import { G, SOURCE_BADGE } from "../lib/design";
 import { LeadReportList, type LeadReportItem } from "../components/LeadReportList";
 import { LeadSearchProgress, type LeadSearchEvent, type LeadSearchProgressData } from "../components/LeadSearchProgress";
-import { Save } from "lucide-react";
+import { Brain, Check, ChevronDown, Save } from "lucide-react";
 
 interface ChatModel {
   id: string;
   label: string;
   sub: string;
+  provider?: string;
 }
 
 interface ToolStep {
@@ -373,21 +374,27 @@ function ModelSelector({ models, value, onChange }: {
       <button
         onClick={() => { if (value && models.length > 0) setOpen((o) => !o); }}
         disabled={!value || models.length === 0}
+        title="Выбор модели"
         style={{
-          display: "flex", alignItems: "center", gap: "5px",
-          padding: "5px 10px", borderRadius: G.radiusXs,
+          display: "flex", alignItems: "center", gap: "8px",
+          height: "38px", minWidth: "210px", maxWidth: "280px",
+          padding: "0 10px", borderRadius: G.radiusSm,
           border: G.border,
-          background: "rgba(255,255,255,0.50)",
+          background: "rgba(255,255,255,0.58)",
           backdropFilter: "blur(8px)",
-          color: G.textSecondary,
+          color: G.textPrimary,
           fontSize: "12px", cursor: value && models.length > 0 ? "pointer" : "default",
           fontFamily: "inherit", opacity: value && models.length > 0 ? 1 : 0.65,
         }}
       >
-        {value ? value.label : "Модели не настроены"}
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}>
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        <Brain size={14} strokeWidth={2} color={G.navy} style={{ flexShrink: 0 }} />
+        <span style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
+          <span style={{ display: "block", fontSize: "10px", lineHeight: 1.1, fontWeight: 700, color: G.textMuted }}>Модель</span>
+          <span style={{ display: "block", fontSize: "12px", lineHeight: 1.25, fontWeight: 700, color: G.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {value ? `${value.label} · ${value.sub}` : "Модели не настроены"}
+          </span>
+        </span>
+        <ChevronDown size={13} strokeWidth={2.3} color={G.textMuted} style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
       </button>
       {open && value && (
         <div style={{
@@ -396,16 +403,16 @@ function ModelSelector({ models, value, onChange }: {
           backdropFilter: G.blurHeavy, WebkitBackdropFilter: G.blurHeavy,
           border: G.border, borderRadius: G.radiusSm,
           boxShadow: G.shadowModal,
-          overflow: "hidden", minWidth: "190px", zIndex: 50,
+          overflow: "hidden", minWidth: "280px", zIndex: 50,
         }}>
-          <div style={{ padding: "8px 12px 4px", fontSize: "10px", fontWeight: 700, color: G.textMuted, textTransform: "uppercase", letterSpacing: "0.08em" }}>Модель</div>
+          <div style={{ padding: "9px 12px 5px", fontSize: "10px", fontWeight: 700, color: G.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Модель маршрута</div>
           {models.map((m) => (
             <div
               key={m.id}
               onClick={() => { onChange(m); setOpen(false); }}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "8px 12px", cursor: "pointer", gap: "12px",
+                padding: "9px 12px", cursor: "pointer", gap: "12px",
                 background: value.id === m.id ? G.navyXLight : "transparent",
                 transition: "background 0.1s",
               }}
@@ -417,9 +424,7 @@ function ModelSelector({ models, value, onChange }: {
                 <div style={{ fontSize: "11px", color: G.textMuted }}>{m.sub}</div>
               </div>
               {value.id === m.id && (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={G.navy} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                <Check size={13} strokeWidth={2.5} color={G.navy} />
               )}
             </div>
           ))}
