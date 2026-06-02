@@ -13,17 +13,18 @@ _PROVIDER_KEY_ATTR = {
 # Stage -> ordered list [(provider, model)].
 # Resolver picks first entry whose key is set.
 STAGE_ROUTING: dict[str, list[tuple[str, str]]] = {
-    "query_gen":      [("openrouter", "google/gemini-2.0-flash-001"), ("nvidia", "z-ai/glm-5.1")],
+    "query_gen":      [("openrouter", "openai/gpt-4o-mini"), ("nvidia", "z-ai/glm-5.1")],
     "lead_discovery": [("openrouter", "perplexity/sonar"), ("nvidia", "z-ai/glm-5.1")],
     "url_classify":   [
-        ("openrouter", "google/gemini-2.0-flash-8b"),
+        ("openrouter", "openai/gpt-4o-mini"),
+        ("openrouter", "google/gemini-2.5-flash-lite"),
         ("groq", "llama-3.3-70b-versatile"),
         ("nvidia", "z-ai/glm-5.1"),
     ],
-    "light_ai":       [("openrouter", "deepseek/deepseek-chat"), ("nvidia", "z-ai/glm-5.1")],
-    "deep_ai":        [("openrouter", "deepseek/deepseek-chat"), ("nvidia", "z-ai/glm-5.1")],
-    "outreach":       [("openrouter", "deepseek/deepseek-chat"), ("nvidia", "z-ai/glm-5.1")],
-    "inbox_classify": [("openrouter", "google/gemini-2.0-flash-8b"), ("nvidia", "z-ai/glm-5.1")],
+    "light_ai":       [("openrouter", "openai/gpt-4o-mini"), ("nvidia", "z-ai/glm-5.1")],
+    "deep_ai":        [("openrouter", "openai/gpt-4o-mini"), ("nvidia", "z-ai/glm-5.1")],
+    "outreach":       [("openrouter", "openai/gpt-4o-mini"), ("nvidia", "z-ai/glm-5.1")],
+    "inbox_classify": [("openrouter", "openai/gpt-4o-mini"), ("nvidia", "z-ai/glm-5.1")],
 }
 
 

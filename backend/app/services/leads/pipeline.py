@@ -29,7 +29,10 @@ from app.services.leads.extraction import (
     normalize_domain,
     normalize_website,
 )
+from app.services.leads.history_filter import check_candidate_history
 from app.services.leads.html_extraction import extract_from_html
+from app.services.leads.icp import QueryPlan, build_icp_profile, build_query_plan_from_queries
+from app.services.leads.icp_filter import reject_by_icp
 from app.services.leads.light_ai import run_light_ai
 from app.services.leads.outreach import generate_outreach
 from app.services.leads.policy import deep_ai_allowed_for_plan, effective_search_limit
@@ -408,12 +411,20 @@ async def _update_progress(
 
 
 async def _call_search_companies(
-    query: str, city: str | None, limit: int, *, fast_mode: bool, niche: str | None = None
+    query: str,
+    city: str | None,
+    limit: int,
+    *,
+    fast_mode: bool,
+    niche: str | None = None,
+    query_plan: QueryPlan | None = None,
 ) -> list[dict]:
     params = signature(search_companies).parameters
     kw: dict = {}
     if "niche" in params:
         kw["niche"] = niche or query
+    if "query_plan" in params and query_plan is not None:
+        kw["query_plan"] = query_plan.to_dict()
     if fast_mode and "enrich" in params and "hunter" in params:
         return await search_companies(query, city, limit, enrich=False, hunter=False, **kw)
     return await search_companies(query, city, limit, **kw)
@@ -432,10 +443,15 @@ async def _call_generate_queries(
     log: LoggedLLMCall,
     *,
     model_override: str | None,
+    icp_profile: dict[str, Any] | None = None,
 ) -> list[str]:
-    if "model_override" in signature(generate_queries).parameters:
-        return await generate_queries(query, city, service_offered, log, model_override=model_override)
-    return await generate_queries(query, city, service_offered, log)
+    params = signature(generate_queries).parameters
+    kw: dict[str, Any] = {}
+    if "model_override" in params:
+        kw["model_override"] = model_override
+    if "icp_profile" in params and icp_profile is not None:
+        kw["icp_profile"] = icp_profile
+    return await generate_queries(query, city, service_offered, log, **kw)
 
 
 async def _call_classify_url(
@@ -487,6 +503,7 @@ async def run_lead_search(
     plan = user.plan or "trial"
     clean_query = " ".join(query.split())
     clean_city = " ".join(city.split()) if city else None
+    icp_profile = build_icp_profile(bp, query=clean_query, city=clean_city)
     requested_limit = max(1, min(limit, 50))
     capped_limit = effective_search_limit(
         requested_limit=requested_limit,
@@ -529,6 +546,7 @@ async def run_lead_search(
             "city": clean_city,
             "queries_generated": [],
             "ai_model": ai_model,
+            "icp_profile": icp_profile.to_dict(),
         },
         total_count=0,
     )
@@ -566,6 +584,9 @@ async def run_lead_search(
             "list_name": resolved_list_name,
             "saved_leads": 0,
             "serp_prescreened_out": 0,
+            "icp_rejected_out": 0,
+            "history_skipped_out": 0,
+            "icp_profile": icp_profile.to_dict(),
             "quota_blocked": True,
         }
         log_meta = _with_progress_meta(
@@ -621,9 +642,16 @@ async def run_lead_search(
             service_offered,
             log,
             model_override=ai_model,
+            icp_profile=icp_profile.to_dict(),
         )
     except Exception:
         queries = [f"{clean_query} {clean_city or ''}".strip()]
+    query_plan = getattr(
+        queries,
+        "query_plan",
+        build_query_plan_from_queries(list(queries), icp_profile, rationale="pipeline_fallback"),
+    )
+    queries = list(queries)
     queries_generated = queries
 
     # STEP 2 — Search (run top 3 queries, merge)
@@ -638,7 +666,14 @@ async def run_lead_search(
         saved=0,
     )
     search_tasks = [
-        _call_search_companies(q, clean_city, candidate_limit, fast_mode=fast_mode, niche=clean_query)
+        _call_search_companies(
+            q,
+            clean_city,
+            candidate_limit,
+            fast_mode=fast_mode,
+            niche=clean_query,
+            query_plan=query_plan,
+        )
         for q in queries[:max_queries]
     ]
     raw_batches = await asyncio.gather(*search_tasks, return_exceptions=True)
@@ -673,6 +708,8 @@ async def run_lead_search(
     filtered = [r for r in raw_merged if not r.get("website") or r.get("website") in kept_websites]
     classified: list[dict] = []
     serp_prescreened_out = 0
+    icp_rejected_out = 0
+    icp_rejections: list[dict[str, Any]] = []
     for raw in filtered:
         website = raw.get("website")
         if not website:
@@ -685,6 +722,19 @@ async def run_lead_search(
         if _is_serp_listicle(raw):
             raw["url_label"] = "serp_prescreen_reject"
             serp_prescreened_out += 1
+            continue
+        icp_reject = reject_by_icp(raw, icp=icp_profile, query_plan=query_plan)
+        if icp_reject is not None:
+            raw["url_label"] = "icp_reject"
+            icp_rejected_out += 1
+            if len(icp_rejections) < 25:
+                icp_rejections.append(
+                    {
+                        **icp_reject.to_dict(),
+                        "name": raw.get("name"),
+                        "website": website,
+                    }
+                )
             continue
 
         label = _deterministic_url_label(website)
@@ -744,6 +794,8 @@ async def run_lead_search(
         "city": clean_city,
         "queries_generated": queries_generated,
         "ai_model": ai_model,
+        "icp_profile": icp_profile.to_dict(),
+        "query_plan": query_plan.to_dict(),
     }
 
     # Persist list and register its id in the log immediately so polling
@@ -773,6 +825,8 @@ async def run_lead_search(
     urls_crawled = 0
     pages_crawled_total = 0
     saved_leads: list[dict] = []
+    history_skipped_out = 0
+    history_skips: list[dict[str, Any]] = []
 
     for raw in deduped:
         if len(saved_leads) >= capped_limit:
@@ -781,6 +835,29 @@ async def run_lead_search(
         website = raw.get("website")
         domain = raw.get("domain")
         display_domain = domain or raw.get("name") or website
+
+        pre_history = await check_candidate_history(
+            db,
+            user_id=user_id,
+            domain=domain,
+            email=_valid_email(raw.get("email")),
+            phone=_valid_phone(raw.get("phone")),
+            company_name=raw.get("name"),
+        )
+        await _release_read_transaction(db)
+        if pre_history.skip:
+            history_skipped_out += 1
+            if len(history_skips) < 25:
+                history_skips.append(
+                    {
+                        "reason": pre_history.reason,
+                        "name": raw.get("name"),
+                        "website": website,
+                        "domain": domain,
+                        "meta": pre_history.meta,
+                    }
+                )
+            continue
 
         await _update_progress(
             db,
@@ -878,6 +955,44 @@ async def run_lead_search(
         contacts["vk"] = contacts["vk"] or snippet_contacts.vk
         contacts = _validated_contacts(contacts)
 
+        post_icp_reject = reject_by_icp(raw, icp=icp_profile, query_plan=query_plan, extracted=extracted)
+        if post_icp_reject is not None:
+            icp_rejected_out += 1
+            if len(icp_rejections) < 25:
+                icp_rejections.append(
+                    {
+                        **post_icp_reject.to_dict(),
+                        "name": raw.get("name"),
+                        "website": website,
+                        "domain": domain,
+                        "stage": "post_extract",
+                    }
+                )
+            continue
+
+        post_history = await check_candidate_history(
+            db,
+            user_id=user_id,
+            domain=None,
+            email=contacts["email"],
+            phone=contacts["phone"],
+            company_name=raw.get("name"),
+        )
+        await _release_read_transaction(db)
+        if post_history.skip:
+            history_skipped_out += 1
+            if len(history_skips) < 25:
+                history_skips.append(
+                    {
+                        "reason": post_history.reason,
+                        "name": raw.get("name"),
+                        "website": website,
+                        "domain": domain,
+                        "meta": post_history.meta,
+                    }
+                )
+            continue
+
         ai_level = "basic"
         light_result = None
         deep_data: dict = {}
@@ -951,7 +1066,7 @@ async def run_lead_search(
                                         visible_text_snippet=visible_text,
                                         email=contacts["email"],
                                         phone=contacts["phone"],
-                                        icp_description=service_offered,
+                                        icp_description=icp_profile.compact(),
                                         city=clean_city,
                                         log=log,
                                         model_override=ai_model,
@@ -1003,7 +1118,7 @@ async def run_lead_search(
                     deep_data = await asyncio.wait_for(
                         run_deep_ai(
                             pages=pages,
-                            service_offered=service_offered,
+                            service_offered=icp_profile.compact(),
                             extracted_email=contacts["email"],
                             extracted_phone=contacts["phone"],
                             extracted_telegram=contacts["telegram"],
@@ -1058,6 +1173,8 @@ async def run_lead_search(
             "maps_rating": raw.get("maps_rating"),
             "maps_reviews_count": raw.get("maps_reviews_count"),
             "serp_position": raw.get("serp_position"),
+            "icp_profile": icp_profile.to_dict(),
+            "query_plan": query_plan.to_dict(),
         }
         scored = score_candidate(score_input)
         logger.info(
@@ -1207,6 +1324,12 @@ async def run_lead_search(
         "list_name": resolved_list_name,
         "saved_leads": len(saved_leads),
         "serp_prescreened_out": serp_prescreened_out,
+        "icp_rejected_out": icp_rejected_out,
+        "icp_rejections": icp_rejections,
+        "history_skipped_out": history_skipped_out,
+        "history_skips": history_skips,
+        "icp_profile": icp_profile.to_dict(),
+        "query_plan": query_plan.to_dict(),
     }
     log_meta = _with_progress_meta(
         log_meta,

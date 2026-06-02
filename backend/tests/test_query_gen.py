@@ -46,3 +46,4 @@ async def test_generate_queries_strips_deduplicates_and_caps(monkeypatch):
         "emergency dental care Kazan",
         "cosmetic dentistry Kazan",
     ]
+    assert queries.query_plan.negative_keywords == ["rating"]

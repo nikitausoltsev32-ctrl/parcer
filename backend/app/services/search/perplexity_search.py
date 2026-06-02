@@ -1,8 +1,4 @@
-"""Direct lead discovery via Perplexity Sonar (live web + citations).
-
-Unlike llm_search (model recalls companies from training memory), Sonar
-queries the live web. URLs are still HEAD-validated before crawling.
-"""
+"""Direct lead discovery via Perplexity Sonar (live web + citations)."""
 from __future__ import annotations
 
 import json
@@ -23,23 +19,33 @@ def _parse_companies_json(text: str) -> list[dict] | None:
         return json.loads(text).get("companies", [])
     except json.JSONDecodeError:
         pass
-    # Sonar sometimes truncates mid-value; extract all complete objects from the array
     matches = re.findall(r'\{[^{}]*"website"\s*:\s*"https?://[^"]+[^{}]*\}', text)
     recovered = []
-    for m in matches:
+    for match in matches:
         try:
-            recovered.append(json.loads(m))
+            recovered.append(json.loads(match))
         except json.JSONDecodeError:
             continue
     return recovered if recovered else None
 
 
 _PROMPT = """\
-Найди {count} реальных действующих компаний из ниши "{niche}" в городе "{city}".
-Ищи по актуальному вебу. Только официальные сайты компаний — не агрегаторы,
-не каталоги, не статьи. Для каждой компании укажи рабочий домен.
+Find {count} real operating B2B companies in "{city}" for this search niche:
+{niche}
 
-Отвечай строго JSON без markdown:
+ICP / query plan:
+Buyer segments: {buyer_segments}
+Positive keywords: {positive_keywords}
+Excluded industries: {excluded_industries}
+Negative keywords: {negative_keywords}
+
+Search the live web. Return official company websites only.
+The companies must be likely BUYERS or USERS of the seller's product.
+Do not return suppliers of similar raw materials unless they are also a target buyer.
+Do not return aggregators, directories, marketplaces, ratings, articles, media, job boards, or social-only pages.
+If excluded/negative terms match, skip the company even if it looks semantically similar.
+
+Return strict JSON without markdown:
 {{"companies":[{{"name":"...","website":"https://...","city":"...","description":"..."}}]}}"""
 
 
@@ -48,10 +54,20 @@ async def perplexity_search_companies(
     city: str | None,
     count: int = 15,
     log: LoggedLLMCall | None = None,
+    query_plan: dict | None = None,
 ) -> list[dict]:
     """Return HEAD-validated company list from Perplexity Sonar web search."""
     client = get_llm_client("lead_discovery")
-    prompt = _PROMPT.format(count=count, niche=niche, city=city or "России")
+    plan = query_plan or {}
+    prompt = _PROMPT.format(
+        count=count,
+        niche=niche,
+        city=city or "Russia",
+        buyer_segments=", ".join(_string_list(plan.get("buyer_segments"))) or "not specified",
+        positive_keywords=", ".join(_string_list(plan.get("positive_keywords"))) or "not specified",
+        excluded_industries=", ".join(_string_list(plan.get("excluded_industries"))) or "not specified",
+        negative_keywords=", ".join(_string_list(plan.get("negative_keywords"))) or "not specified",
+    )
     dummy_log = log or LoggedLLMCall()
     try:
         result = await logged_chat(
@@ -77,10 +93,18 @@ async def perplexity_search_companies(
         return []
 
     candidates = [
-        {**c, "source": "perplexity"}
-        for c in companies
-        if isinstance(c, dict) and isinstance(c.get("website"), str) and c["website"].startswith("http")
+        {**company, "source": "perplexity"}
+        for company in companies
+        if isinstance(company, dict)
+        and isinstance(company.get("website"), str)
+        and company["website"].startswith("http")
     ]
     if not candidates:
         return []
     return await _head_validate(candidates)
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [" ".join(str(item).split()) for item in value if " ".join(str(item).split())]

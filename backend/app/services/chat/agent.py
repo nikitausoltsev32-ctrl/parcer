@@ -7,9 +7,14 @@ import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.campaign import CampaignMessage
 from app.models.chat import ChatMessage, ChatSession
+from app.models.contact import Contact
+from app.models.inbox_message import InboxMessage
+from app.models.lead import Lead
 from app.models.user import User
 from app.services.chat.tools import HANDLERS, TOOLS_SCHEMA
 from app.services.llm import get_llm_client
@@ -110,13 +115,51 @@ def _forced_import_args(user_text: str) -> dict | None:
 
 def _system_with_profile(user: User) -> str:
     bp = user.business_profile or {}
+    icp = bp.get("icp") if isinstance(bp.get("icp"), dict) else {}
+    icp_profile_lines = [
+        f"Website: {bp.get('website') or bp.get('website_url') or 'not set'}",
+        f"ICP summary: {icp.get('seller_summary', 'not set')}",
+        f"ICP buyer segments: {_join_profile_list(icp.get('buyer_segments'))}",
+        f"ICP exclusions: {_join_profile_list(icp.get('excluded_industries'))}",
+    ]
     profile = "\n".join([
         f"Бизнес пользователя: {bp.get('business', 'не указан')}",
         f"Оффер: {bp.get('offer', 'не указан')}",
         f"Город: {bp.get('city', 'не указан')}",
+        *icp_profile_lines,
         f"Тон по умолчанию: {bp.get('tone_default', 'friendly')}",
     ])
     return SYSTEM_PROMPT + "\n" + profile
+
+
+def _join_profile_list(value: object) -> str:
+    if not isinstance(value, list):
+        return "not set"
+    cleaned = [" ".join(str(item).split()) for item in value if " ".join(str(item).split())]
+    return ", ".join(cleaned[:8]) or "not set"
+
+
+async def _crm_context_summary(db: AsyncSession, user: User) -> str:
+    try:
+        contacts = await db.scalar(select(func.count(Contact.id)).where(Contact.user_id == user.id))
+        leads = await db.scalar(select(func.count(Lead.id)).where(Lead.user_id == user.id))
+        sent = await db.scalar(
+            select(func.count(CampaignMessage.id))
+            .join(Contact, Contact.id == CampaignMessage.contact_id)
+            .where(Contact.user_id == user.id, CampaignMessage.sent_at.is_not(None))
+        )
+        replies = await db.scalar(select(func.count(InboxMessage.id)).where(InboxMessage.user_id == user.id))
+    except Exception:
+        return "CRM memory: unavailable for this turn."
+
+    return (
+        "CRM memory: "
+        f"leads_found={int(leads or 0)}, "
+        f"contacts={int(contacts or 0)}, "
+        f"messages_sent={int(sent or 0)}, "
+        f"inbox_replies={int(replies or 0)}. "
+        "Use CRM tools before claiming details about a specific company."
+    )
 
 
 async def stream_agent(
@@ -133,7 +176,8 @@ async def stream_agent(
     def sse(event: str, payload: dict) -> str:
         return f"data: {json.dumps({'event': event, **payload}, ensure_ascii=False)}\n\n"
 
-    messages: list[LLMMessage] = [LLMMessage(role="system", content=_system_with_profile(user))]
+    crm_context = await _crm_context_summary(db, user)
+    messages: list[LLMMessage] = [LLMMessage(role="system", content=f"{_system_with_profile(user)}\n{crm_context}")]
     for msg in history[-20:]:
         if msg.role == "assistant" and msg.tool_calls:
             rebuilt_calls = []

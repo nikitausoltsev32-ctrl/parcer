@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from inspect import signature
 
 from app.services.llm.routing import provider_has_key
 from app.services.search.firecrawl import enrich_website
@@ -19,6 +20,7 @@ async def search_companies(
     enrich: bool = True,
     hunter: bool = False,
     niche: str | None = None,
+    query_plan: dict | None = None,
 ) -> list[dict]:
     """Параллельный поиск: Google Maps + Google Search (SerpAPI) + LLM, затем Firecrawl."""
     logger.info("search_companies: start query=%r city=%r limit=%s", query, city, limit)
@@ -26,7 +28,7 @@ async def search_companies(
     capped_limit = max(1, min(limit, 50))
     fetch = min(max(capped_limit * 2, 8), 50)
     discovery = (
-        _safe_perplexity(niche or query, city, min(fetch, 20))
+        _safe_perplexity(niche or query, city, min(fetch, 20), query_plan=query_plan)
         if provider_has_key("openrouter")
         else _safe_llm_search(niche or query, city, min(fetch, 20))
     )
@@ -117,9 +119,11 @@ async def _safe_llm_search(niche: str, city: str | None, count: int) -> list[dic
         return []
 
 
-async def _safe_perplexity(niche: str, city: str | None, count: int) -> list[dict]:
+async def _safe_perplexity(niche: str, city: str | None, count: int, *, query_plan: dict | None = None) -> list[dict]:
     try:
-        return await perplexity_search_companies(niche, city, count)
+        if "query_plan" not in signature(perplexity_search_companies).parameters:
+            return await perplexity_search_companies(niche, city, count)
+        return await perplexity_search_companies(niche, city, count, query_plan=query_plan)
     except Exception as exc:
         logger.warning("search_companies: perplexity failed: %r", exc)
         return []

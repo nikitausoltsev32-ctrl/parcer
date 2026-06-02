@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, EmailStr
 
@@ -8,6 +9,9 @@ class BusinessProfile(BaseModel):
     business: str | None = None
     offer: str | None = None
     city: str | None = None
+    website: str | None = None
+    website_url: str | None = None
+    icp: dict[str, Any] | None = None
     tone_default: str = "friendly"
 
 

@@ -62,7 +62,7 @@ def test_stage_routing_picks_openrouter_for_light_ai(monkeypatch):
     monkeypatch.setattr(settings, "nvidia_api_key", "nv-key")
     client = get_llm_client("light_ai")
     assert client.base_url == "https://openrouter.ai/api/v1"
-    assert client.model == "deepseek/deepseek-chat"
+    assert client.model == "openai/gpt-4o-mini"
 
 
 def test_stage_routing_falls_back_to_nvidia_without_openrouter(monkeypatch):

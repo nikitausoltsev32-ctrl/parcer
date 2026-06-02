@@ -1,7 +1,10 @@
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 
+from app.models.campaign import CampaignMessage
+from app.models.contact import Contact
 from app.models.lead import Lead, LeadList
 from app.models.lead_processing_log import LeadProcessingLog
 from app.models.user import User
@@ -678,3 +681,62 @@ async def test_run_lead_search_discards_invalid_contacts_before_scoring(monkeypa
     assert contact["phone"] is None
     assert contact["score"] == 55
     assert contact["lead_fit"]["priority"] == "medium"
+
+
+async def test_run_lead_search_skips_already_contacted_company(monkeypatch, db_session):
+    user = User(id=uuid.uuid4(), email="history-skip@test.com", password_hash="hash")
+    contact = Contact(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        contact_name="Already Contacted Co",
+        email="sales@already.test",
+        status="contacted",
+    )
+    message = CampaignMessage(
+        id=uuid.uuid4(),
+        campaign_id=uuid.uuid4(),
+        contact_id=contact.id,
+        subject="Intro",
+        body="Hello",
+        status="sent",
+        sent_at=datetime.now(UTC),
+    )
+    db_session.add_all([user, contact, message])
+    await db_session.commit()
+
+    async def fake_search_companies(query: str, city: str | None, limit: int):
+        return [
+            {
+                "name": "Already Contacted Co",
+                "website": "https://already.test",
+                "email": "sales@already.test",
+                "phone": None,
+                "city": city,
+                "source": "serp_google",
+                "website_summary": "Company website.",
+            }
+        ]
+
+    async def fake_generate_queries(query: str, city: str | None, service_offered: str, log):
+        return [query]
+
+    async def fake_crawl_website(website: str, plan: str):
+        return []
+
+    monkeypatch.setattr("app.services.leads.pipeline.generate_queries", fake_generate_queries)
+    monkeypatch.setattr("app.services.leads.pipeline.search_companies", fake_search_companies)
+    monkeypatch.setattr("app.services.leads.pipeline.crawl_website", fake_crawl_website)
+
+    result = await run_lead_search(
+        db_session,
+        user=user,
+        query="already contacted companies",
+        city="Kazan",
+        limit=1,
+    )
+
+    log = (await db_session.execute(select(LeadProcessingLog))).scalar_one()
+
+    assert result.saved == 0
+    assert log.meta["history_skipped_out"] == 1
+    assert log.meta["history_skips"][0]["reason"] == "already_contacted"

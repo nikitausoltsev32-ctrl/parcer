@@ -742,7 +742,9 @@ async def _handle_save_companies(args: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _handle_get_company_info(args: dict[str, Any]) -> dict[str, Any]:
+    from app.models.campaign import CampaignMessage
     from app.models.company import Company
+    from app.models.inbox_message import InboxMessage
 
     db: AsyncSession = args.pop("__db")
     user: User = args.pop("__user")
@@ -779,6 +781,36 @@ async def _handle_get_company_info(args: dict[str, Any]) -> dict[str, Any]:
         if not enrichment.get("description") and enrichment.get("website_summary"):
             result["website_summary"] = enrichment["website_summary"][:300]
         result["enriched"] = bool(enrichment.get("description"))
+        messages = (
+            await db.execute(
+                select(CampaignMessage)
+                .where(CampaignMessage.contact_id == contact.id)
+                .order_by(CampaignMessage.sent_at.desc().nullslast())
+                .limit(5)
+            )
+        ).scalars().all()
+        replies = (
+            await db.execute(
+                select(InboxMessage)
+                .where(InboxMessage.user_id == user.id, InboxMessage.contact_id == contact.id)
+                .order_by(InboxMessage.received_at.desc().nullslast(), InboxMessage.created_at.desc())
+                .limit(5)
+            )
+        ).scalars().all()
+        result["history"] = {
+            "messages_sent": sum(1 for message in messages if message.sent_at is not None),
+            "latest_message_status": messages[0].status if messages else None,
+            "latest_sent_at": messages[0].sent_at.isoformat() if messages and messages[0].sent_at else None,
+            "replies": [
+                {
+                    "id": str(reply.id),
+                    "classification": reply.classification,
+                    "subject": reply.subject,
+                    "received_at": reply.received_at.isoformat() if reply.received_at else None,
+                }
+                for reply in replies
+            ],
+        }
         return result
 
     if company_name:

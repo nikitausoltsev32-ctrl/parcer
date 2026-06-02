@@ -5,7 +5,7 @@ from app.services.llm.routing import STAGE_ROUTING, provider_has_key, resolve_st
 def test_resolve_uses_primary_when_its_key_present(monkeypatch):
     monkeypatch.setattr(settings, "openrouter_api_key", "or-key")
     monkeypatch.setattr(settings, "nvidia_api_key", "nv-key")
-    assert resolve_stage("light_ai") == ("openrouter", "deepseek/deepseek-chat")
+    assert resolve_stage("light_ai") == ("openrouter", "openai/gpt-4o-mini")
 
 
 def test_resolve_falls_back_when_primary_key_missing(monkeypatch):

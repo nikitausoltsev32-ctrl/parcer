@@ -1,4 +1,4 @@
-"""Step 9 — Deep AI Extraction. Fills full Lead JSON Schema. Cost: 5 credits."""
+"""Step 9 - Deep AI Extraction. Fills full Lead JSON Schema. Cost: 5 credits."""
 from __future__ import annotations
 
 import json
@@ -8,20 +8,26 @@ from app.services.llm.factory import get_llm_client
 from app.services.llm.logged import LoggedLLMCall, logged_chat
 
 _PROMPT = """\
-Ты анализируешь сайт компании как B2B-специалист.
-Пользователь продаёт: {service_offered}
+You analyze a candidate company website for B2B lead qualification.
 
+Seller ICP:
+{service_offered}
+
+Candidate website pages:
 {pages_text}
 
-Контакты из парсера: email={email}, phone={phone}, telegram={telegram}
+Extracted public contacts: email={email}, phone={phone}, telegram={telegram}
 
-Заполни JSON строго по схеме. Данные ТОЛЬКО из текста выше. Если нет — null. НЕ ВЫДУМЫВАЙ.
-lead_fit.score: 0–100. Оценивай реальную ценность лида для того, кто продаёт {service_offered}.
-  Высокий score (70+): компания коммерческая, видны проблемы/слабости, которые закрывает предложение.
-  lead_fit.reason: 1–2 предложения — конкретно почему компания интересна (или нет). Только факты с сайта.
-  lead_fit.priority: "high" если score>=70, "medium" если >=45, "low" иначе.
-Отвечай строго JSON без текста вне JSON:
+Return strict JSON only. Use only facts from the provided text. If data is missing, return null/empty arrays.
 
+Lead fit rules:
+- Score 70+: clear evidence this company is a likely buyer/user in one of the ICP buyer segments.
+- Score 45-69: possible fit, but evidence is partial.
+- Score below 45: weak/generic fit.
+- Score <=25 if the company belongs to an excluded industry or negative keyword group from ICP.
+- Do not infer needs from generic industry labels alone.
+
+JSON shape:
 {{
   "company_name": null,
   "city": null,
@@ -54,6 +60,8 @@ lead_fit.score: 0–100. Оценивай реальную ценность ли
     "priority": "low",
     "reason": null
   }},
+  "positive_evidence": [],
+  "negative_evidence": [],
   "confidence": 0.5
 }}"""
 
@@ -67,16 +75,14 @@ async def run_deep_ai(
     extracted_telegram: str | None,
     log: LoggedLLMCall,
 ) -> dict:
-    pages_text = "\n\n---\n\n".join(
-        f"URL: {p['url']}\n{p.get('html', '')[:3000]}" for p in pages[:5]
-    )
+    pages_text = "\n\n---\n\n".join(f"URL: {p['url']}\n{p.get('html', '')[:3000]}" for p in pages[:5])
     client = get_llm_client("deep_ai")
     prompt = _PROMPT.format(
-        service_offered=service_offered[:200],
+        service_offered=service_offered[:1200],
         pages_text=pages_text[:8000],
-        email=extracted_email or "нет",
-        phone=extracted_phone or "нет",
-        telegram=extracted_telegram or "нет",
+        email=extracted_email or "none",
+        phone=extracted_phone or "none",
+        telegram=extracted_telegram or "none",
     )
     result = await logged_chat(
         client,
@@ -84,7 +90,7 @@ async def run_deep_ai(
         stage="deep_ai",
         log=log,
         temperature=0.2,
-        max_tokens=1024,
+        max_tokens=1200,
         timeout=120.0,
         response_format={"type": "json_object"},
     )
