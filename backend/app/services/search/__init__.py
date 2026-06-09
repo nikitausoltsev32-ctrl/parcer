@@ -4,7 +4,6 @@ from inspect import signature
 
 from app.services.llm.routing import provider_has_key
 from app.services.search.firecrawl import enrich_website
-from app.services.search.hunter import find_emails_by_domain
 from app.services.search.llm_search import llm_search_companies
 from app.services.search.perplexity_search import perplexity_search_companies
 from app.services.search.serp import search_google, search_serp
@@ -18,7 +17,6 @@ async def search_companies(
     limit: int = 20,
     *,
     enrich: bool = True,
-    hunter: bool = False,
     niche: str | None = None,
     query_plan: dict | None = None,
 ) -> list[dict]:
@@ -78,18 +76,6 @@ async def search_companies(
             logger.info("search_companies: firecrawl attempted for %s websites", len(to_enrich))
         except Exception as exc:
             logger.warning("search_companies: firecrawl gather failed: %r", exc)
-
-    # Hunter: ищем email по домену для компаний без email
-    to_hunt = [r for r in results if r.get("website") and not r.get("email")][:10] if hunter else []
-    if to_hunt:
-        hunter_results = await asyncio.gather(
-            *[find_emails_by_domain(r["website"]) for r in to_hunt],
-            return_exceptions=True,
-        )
-        for r, emails in zip(to_hunt, hunter_results):
-            if isinstance(emails, list) and emails:
-                r["email"] = emails[0]["email"]
-        logger.info("search_companies: hunter attempted for %s domains", len(to_hunt))
 
     logger.info("search_companies: done total=%s", len(results))
     return results

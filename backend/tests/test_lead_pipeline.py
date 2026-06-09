@@ -59,7 +59,7 @@ async def test_run_lead_search_saves_contact_list_contacts_and_log(monkeypatch, 
     assert result.list_name == "Design Kazan"
     assert result.contacts[0]["email"] == "hello@studio.test"
     assert result.contacts[0]["phone"] == "+7 999 000-00-00"
-    assert result.contacts[0]["score"] >= 80
+    assert result.contacts[0]["score"] == 49
 
     lead_list = (await db_session.execute(select(LeadList))).scalar_one()
     lead = (await db_session.execute(select(Lead))).scalar_one()
@@ -679,8 +679,8 @@ async def test_run_lead_search_discards_invalid_contacts_before_scoring(monkeypa
     assert lead.phone is None
     assert contact["email"] is None
     assert contact["phone"] is None
-    assert contact["score"] == 55
-    assert contact["lead_fit"]["priority"] == "medium"
+    assert contact["score"] == 35
+    assert contact["lead_fit"]["priority"] == "low"
 
 
 async def test_run_lead_search_skips_already_contacted_company(monkeypatch, db_session):

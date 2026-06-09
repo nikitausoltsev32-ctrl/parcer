@@ -124,7 +124,7 @@ async def search_google(query: str, city: str | None = None, limit: int = 20) ->
         "gl": "ru",
         "hl": "ru",
         "location": location,
-        "num": min(limit, 20),
+        "num": min(max(limit, 20), 30),
     }
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(_BASE, params=params)

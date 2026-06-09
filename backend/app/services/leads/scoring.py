@@ -39,22 +39,23 @@ def score_candidate(candidate: dict[str, Any]) -> CandidateScore:
             score += _PHONE_BONUS
             reasons.append("есть телефон")
     else:
-        # Mechanical fallback (no AI ran)
+        # Mechanical fallback (no AI ran) — capped below "medium" so it never
+        # looks like a verified ICP fit next to AI-scored leads.
         score = 0
         if candidate.get("name"):
             score += 10
             reasons.append("есть название")
         if candidate.get("website"):
-            score += 25
+            score += 15
             reasons.append("есть сайт")
         if candidate.get("email"):
-            score += 20
+            score += 12
             reasons.append("есть email")
         if candidate.get("phone"):
-            score += 15
+            score += 8
             reasons.append("есть телефон")
         if candidate.get("website_summary"):
-            score += 20
+            score += 10
             reasons.append("есть описание")
 
     # Maps weakness bonuses (weak online presence = good prospect)
@@ -78,7 +79,7 @@ def score_candidate(candidate: dict[str, Any]) -> CandidateScore:
         score += 5
         reasons.append("слабая позиция")
 
-    score = min(score, 100)
+    score = min(score, 100 if ai_score is not None else 49)
 
     if score >= 75:
         priority = "high"

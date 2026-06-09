@@ -86,10 +86,18 @@ async def llm_search_companies(
 
 async def _head_check(session: httpx.AsyncClient, company: dict) -> dict | None:
     url = company["website"].rstrip("/")
+    validated = {**company, "source": company.get("source") or "llm_search"}
     try:
         resp = await session.head(url, timeout=3.0, follow_redirects=True)
         if resp.status_code < 400:
-            return {**company, "source": "llm_search"}
+            return validated
+    except Exception:
+        pass
+    # Many RU sites reject HEAD (405/403) — retry with GET before dropping
+    try:
+        resp = await session.get(url, timeout=5.0, follow_redirects=True)
+        if resp.status_code < 400:
+            return validated
     except Exception:
         pass
     return None

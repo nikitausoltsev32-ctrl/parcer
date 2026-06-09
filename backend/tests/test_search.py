@@ -27,15 +27,11 @@ async def test_search_companies_returns_google_maps_results(monkeypatch):
     async def fake_enrich(url):
         return "Design studio summary"
 
-    async def no_hunter(domain):
-        return []
-
     async def no_discovery(*a, **k): return []
 
     monkeypatch.setattr(search_module, "search_serp", fake_serp)
     monkeypatch.setattr(search_module, "search_google", fake_google)
     monkeypatch.setattr(search_module, "enrich_website", fake_enrich)
-    monkeypatch.setattr(search_module, "find_emails_by_domain", no_hunter)
     monkeypatch.setattr(search_module, "llm_search_companies", no_discovery)
     monkeypatch.setattr(search_module, "perplexity_search_companies", no_discovery)
 
@@ -260,5 +256,5 @@ async def test_search_uses_perplexity_when_openrouter_key_present(monkeypatch):
     monkeypatch.setattr(search_module, "perplexity_search_companies", fake_perplexity)
     monkeypatch.setattr(search_module, "llm_search_companies", fake_llm)
 
-    out = await search_module.search_companies("ниша", "Москва", limit=10, enrich=False, hunter=False)
+    out = await search_module.search_companies("ниша", "Москва", limit=10, enrich=False)
     assert any(r.get("source") == "perplexity" for r in out)

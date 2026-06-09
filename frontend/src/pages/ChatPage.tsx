@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api } from "../lib/api";
 import { getToken } from "../lib/auth";
 import { streamSSE } from "../lib/sse";
@@ -359,20 +360,39 @@ function ModelSelector({ models, value, onChange }: {
   onChange: (m: ChatModel) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function close(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (ref.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     }
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    function dismiss() { setOpen(false); }
+    window.addEventListener("resize", dismiss);
+    window.addEventListener("scroll", dismiss, true);
+    return () => {
+      window.removeEventListener("resize", dismiss);
+      window.removeEventListener("scroll", dismiss, true);
+    };
+  }, [open]);
+
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button
-        onClick={() => { if (value && models.length > 0) setOpen((o) => !o); }}
+        onClick={() => {
+          if (!value || models.length === 0) return;
+          setAnchor(ref.current?.getBoundingClientRect() ?? null);
+          setOpen((o) => !o);
+        }}
         disabled={!value || models.length === 0}
         title="Выбор модели"
         style={{
@@ -396,14 +416,16 @@ function ModelSelector({ models, value, onChange }: {
         </span>
         <ChevronDown size={13} strokeWidth={2.3} color={G.textMuted} style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
       </button>
-      {open && value && (
-        <div style={{
-          position: "absolute", bottom: "calc(100% + 6px)", left: 0,
-          background: "rgba(245,248,252,0.92)",
+      {open && value && anchor && createPortal(
+        <div ref={menuRef} style={{
+          position: "fixed",
+          left: Math.max(8, Math.min(anchor.left, window.innerWidth - 288)),
+          bottom: window.innerHeight - anchor.top + 6,
+          background: "rgba(245,248,252,0.96)",
           backdropFilter: G.blurHeavy, WebkitBackdropFilter: G.blurHeavy,
           border: G.border, borderRadius: G.radiusSm,
           boxShadow: G.shadowModal,
-          overflow: "hidden", minWidth: "280px", zIndex: 50,
+          overflow: "hidden", minWidth: "280px", zIndex: 1000,
         }}>
           <div style={{ padding: "9px 12px 5px", fontSize: "10px", fontWeight: 700, color: G.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Модель маршрута</div>
           {models.map((m) => (
@@ -428,7 +450,8 @@ function ModelSelector({ models, value, onChange }: {
               )}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

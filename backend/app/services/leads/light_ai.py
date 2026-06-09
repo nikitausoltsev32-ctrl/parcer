@@ -8,6 +8,7 @@ from typing import Any
 from app.services.llm.base import LLMMessage
 from app.services.llm.factory import get_llm_client
 from app.services.llm.logged import LoggedLLMCall, logged_chat
+from app.services.llm.routing import provider_has_key
 
 _PROMPT = """\
 You are a B2B lead-fit classifier. Return only strict JSON without markdown.
@@ -115,16 +116,22 @@ async def run_light_ai(
         icp_description=_clean_string(icp_description)[:1200],
         city=city or "unknown",
     )
-    result = await logged_chat(
-        client,
-        [LLMMessage(role="user", content=prompt)],
-        stage="light_ai",
-        log=log,
-        temperature=0.1,
-        max_tokens=420,
-        timeout=90.0,
-        response_format={"type": "json_object"},
-    )
+    chat_kwargs: dict[str, Any] = {
+        "stage": "light_ai",
+        "log": log,
+        "temperature": 0.1,
+        "max_tokens": 420,
+        "timeout": 90.0,
+        "response_format": {"type": "json_object"},
+    }
+    messages = [LLMMessage(role="user", content=prompt)]
+    try:
+        result = await logged_chat(client, messages, **chat_kwargs)
+    except Exception:
+        if model_override or not provider_has_key("nvidia"):
+            raise
+        fallback = get_llm_client("light_ai", model_override="nvidia/z-ai/glm-5.1")
+        result = await logged_chat(fallback, messages, **chat_kwargs)
     text = (result.content or "").strip()
     if text.startswith("```"):
         text = text.split("```")[1].lstrip("json").strip()

@@ -26,6 +26,10 @@ Lead fit rules:
 - Score below 45: weak/generic fit.
 - Score <=25 if the company belongs to an excluded industry or negative keyword group from ICP.
 - Do not infer needs from generic industry labels alone.
+- Score measures ICP fit only, not company size or quality. If the company is NOT a likely buyer, score <=30.
+- priority must match score: high if score>=75, medium if 50-74, low if <50.
+- Never combine a high score with priority "low".
+- company_name: the official short company name from the site, not a page title or SEO phrase.
 
 JSON shape:
 {{

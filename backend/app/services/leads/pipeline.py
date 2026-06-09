@@ -229,11 +229,30 @@ def _lead_description(
     return None
 
 
+_FILE_EXT_TLDS = {"svg", "png", "jpg", "jpeg", "gif", "webp", "css", "js", "ico", "pdf", "html"}
+_SEO_NAME_MARKERS = ("купить", "цена", "оптом", "заказать", "официальный сайт", "недорого", "от производителя")
+
+
+def _clean_company_name(value: Any) -> str | None:
+    """SERP titles are often SEO phrases, not company names — trim or drop them."""
+    cleaned = _clean_description(value)
+    if not cleaned:
+        return None
+    cleaned = re.split(r"\s+[|—–]\s+|\s+-\s+", cleaned)[0].strip(" .,")
+    low = cleaned.lower()
+    if not cleaned or cleaned.endswith("...") or any(marker in low for marker in _SEO_NAME_MARKERS):
+        return None
+    return cleaned
+
+
 def _valid_email(value: Any) -> str | None:
     cleaned = _clean_description(value)
-    if cleaned and _VALID_EMAIL_RE.fullmatch(cleaned):
-        return cleaned
-    return None
+    if not cleaned or not _VALID_EMAIL_RE.fullmatch(cleaned):
+        return None
+    # Asset paths like "logo@bg.svg" match the email regex — reject file extensions.
+    if cleaned.rsplit(".", 1)[-1].lower() in _FILE_EXT_TLDS:
+        return None
+    return cleaned
 
 
 def _valid_phone(value: Any) -> str | None:
@@ -241,9 +260,11 @@ def _valid_phone(value: Any) -> str | None:
     if not cleaned:
         return None
     digits = re.sub(r"\D", "", cleaned)
-    if len(digits) == 11 and digits[0] in {"7", "8"}:
-        return cleaned
-    return None
+    if len(digits) != 11 or digits[0] not in {"7", "8"}:
+        return None
+    if len(set(digits[1:])) == 1:  # placeholder like +7 (999) 999-9999
+        return None
+    return cleaned
 
 
 def _validated_contacts(contacts: dict[str, Any]) -> dict[str, Any]:
@@ -425,8 +446,8 @@ async def _call_search_companies(
         kw["niche"] = niche or query
     if "query_plan" in params and query_plan is not None:
         kw["query_plan"] = query_plan.to_dict()
-    if fast_mode and "enrich" in params and "hunter" in params:
-        return await search_companies(query, city, limit, enrich=False, hunter=False, **kw)
+    if fast_mode and "enrich" in params:
+        return await search_companies(query, city, limit, enrich=False, **kw)
     return await search_companies(query, city, limit, **kw)
 
 
@@ -513,7 +534,7 @@ async def run_lead_search(
     candidate_limit = (
         min(
             50,
-            max(capped_limit * (3 if fast_mode else 1), FAST_CANDIDATE_MIN if fast_mode else capped_limit),
+            max(capped_limit * (3 if fast_mode else 2), FAST_CANDIDATE_MIN if fast_mode else capped_limit),
         )
         if capped_limit > 0
         else 0
@@ -654,8 +675,8 @@ async def run_lead_search(
     queries = list(queries)
     queries_generated = queries
 
-    # STEP 2 — Search (run top 3 queries, merge)
-    max_queries = 2 if fast_mode else 3
+    # STEP 2 — Search (merge top queries; more breadth in normal mode)
+    max_queries = 2 if fast_mode else 5
     await _update_progress(
         db,
         pre_log_id,
@@ -1153,6 +1174,14 @@ async def run_lead_search(
         deep_fit = deep_data.get("lead_fit") if isinstance(deep_data.get("lead_fit"), dict) else {}
         deep_fit_score = deep_fit.get("score")
         deep_fit_reason = _clean_description(deep_fit.get("reason"))
+        # Model sometimes returns a high score with priority=low and a negative
+        # reason ("не соответствует ICP") — distrust the score in that case.
+        if (
+            isinstance(deep_fit_score, int | float)
+            and deep_fit_score >= 70
+            and deep_fit.get("priority") == "low"
+        ):
+            deep_fit_score = 45
 
         # Use deep AI's lead_fit when available; fall back to light AI relevance_score
         ai_score = (
@@ -1181,10 +1210,11 @@ async def run_lead_search(
             "[pipeline] SCORE for %s: ai_level=%s score=%d priority=%s ai_score_input=%s",
             domain, ai_level, scored.score, scored.priority, ai_score
         )
+        # Priority always derived from the final score so it never contradicts it.
         lead_fit = {
             "score": scored.score,
             "reason": deep_fit_reason or scored.reason,
-            "priority": deep_fit.get("priority") or scored.priority,
+            "priority": scored.priority,
         }
 
         # STEP 12 — Outreach Generation (3 credits, only for deep AI + score >= 50)
@@ -1209,7 +1239,7 @@ async def run_lead_search(
                 try:
                     outreach_data = await generate_outreach(
                         service_offered=service_offered,
-                        company_name=deep_data.get("company_name") or raw.get("name"),
+                        company_name=deep_data.get("company_name") or _clean_company_name(raw.get("name")) or raw.get("name"),
                         industry=deep_data.get("industry") or (light_result.industry if light_result else None),
                         description=description,
                         pain_points=deep_data.get("pain_points") or [],
@@ -1242,7 +1272,7 @@ async def run_lead_search(
             list_id=lead_list_id,
             domain=domain,
             website=website,
-            company_name=deep_data.get("company_name") or raw.get("name"),
+            company_name=deep_data.get("company_name") or _clean_company_name(raw.get("name")),
             city=deep_data.get("city") or (light_result.city if light_result else raw.get("city")),
             region=deep_data.get("region"),
             address=deep_data.get("address") or extracted.get("address") or raw.get("address"),

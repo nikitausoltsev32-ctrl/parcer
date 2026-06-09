@@ -19,7 +19,7 @@ def _parse_companies_json(text: str) -> list[dict] | None:
         return json.loads(text).get("companies", [])
     except json.JSONDecodeError:
         pass
-    matches = re.findall(r'\{[^{}]*"website"\s*:\s*"https?://[^"]+[^{}]*\}', text)
+    matches = re.findall(r'\{[^{}]*"website"\s*:\s*"[^"]+"[^{}]*\}', text)
     recovered = []
     for match in matches:
         try:
@@ -92,16 +92,30 @@ async def perplexity_search_companies(
         logger.warning("perplexity_search: bad JSON: %r", text[:200])
         return []
 
-    candidates = [
-        {**company, "source": "perplexity"}
-        for company in companies
-        if isinstance(company, dict)
-        and isinstance(company.get("website"), str)
-        and company["website"].startswith("http")
-    ]
+    candidates = []
+    for company in companies:
+        if not isinstance(company, dict):
+            continue
+        website = _normalize_website(company.get("website"))
+        if website:
+            candidates.append({**company, "website": website, "source": "perplexity"})
     if not candidates:
         return []
     return await _head_validate(candidates)
+
+
+def _normalize_website(value: object) -> str | None:
+    """Perplexity often returns bare domains ('dk96.ru') — add scheme instead of dropping them."""
+    if not isinstance(value, str):
+        return None
+    site = value.strip().rstrip("/")
+    if not site:
+        return None
+    if site.startswith(("http://", "https://")):
+        return site
+    if "." in site and " " not in site:
+        return f"https://{site}"
+    return None
 
 
 def _string_list(value: object) -> list[str]:
