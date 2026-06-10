@@ -11,14 +11,16 @@ const TONES = [
 
 interface Props {
   onDone: () => void;
+  initialBusiness?: string;
+  initialCity?: string;
 }
 
-export default function SetupWizard({ onDone }: Props) {
+export default function SetupWizard({ onDone, initialBusiness, initialCity }: Props) {
   const update = useUpdateMe();
   const [step, setStep] = useState(0);
   const [fullName, setFullName] = useState("");
-  const [city, setCity] = useState("");
-  const [business, setBusiness] = useState("");
+  const [city, setCity] = useState(initialCity ?? "");
+  const [business, setBusiness] = useState(initialBusiness ?? "");
   const [offer, setOffer] = useState("");
   const [tone, setTone] = useState("friendly");
 

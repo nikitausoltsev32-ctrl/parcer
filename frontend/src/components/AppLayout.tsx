@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useLogout, useMe } from "../features/auth/hooks";
-import OnboardingModal from "./OnboardingModal";
+import OnboardingModal, { type OnboardingAnswers } from "./OnboardingModal";
 import SetupWizard from "./SetupWizard";
 import { G } from "../lib/design";
 
@@ -35,6 +35,7 @@ export default function AppLayout() {
   const [expanded, setExpanded] = useState(false);
   const [showTour, setShowTour] = useState(() => !localStorage.getItem("lida_onboarding_seen"));
   const [showWizard, setShowWizard] = useState(false);
+  const [tourAnswers, setTourAnswers] = useState<OnboardingAnswers | undefined>();
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
 
   useEffect(() => {
@@ -54,14 +55,19 @@ export default function AppLayout() {
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", fontFamily: "'Manrope', sans-serif" }}>
       {showTour && (
         <OnboardingModal
-          onDone={() => {
+          onDone={(answers) => {
+            setTourAnswers(answers);
             setShowTour(false);
             if (!me?.business_profile?.business) setShowWizard(true);
           }}
         />
       )}
       {!showTour && showWizard && (
-        <SetupWizard onDone={() => setShowWizard(false)} />
+        <SetupWizard
+          initialBusiness={tourAnswers?.industry}
+          initialCity={tourAnswers?.geo}
+          onDone={() => setShowWizard(false)}
+        />
       )}
 
       {/* Desktop Sidebar */}

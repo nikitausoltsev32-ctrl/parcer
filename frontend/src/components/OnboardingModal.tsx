@@ -201,8 +201,14 @@ function SlideText({ num, title, desc, features, color }: { num: string; title: 
   );
 }
 
+export interface OnboardingAnswers {
+  industry: string;
+  geo: string;
+  email: string;
+}
+
 interface Props {
-  onDone: () => void;
+  onDone: (answers?: OnboardingAnswers) => void;
 }
 
 export default function OnboardingModal({ onDone }: Props) {
@@ -212,7 +218,8 @@ export default function OnboardingModal({ onDone }: Props) {
 
   function complete() {
     localStorage.setItem("lida_onboarding_seen", "1");
-    onDone();
+    const filled = answers.industry.trim() || answers.geo.trim() || answers.email.trim();
+    onDone(filled ? (answers as unknown as OnboardingAnswers) : undefined);
   }
 
   function goNext() {
@@ -242,8 +249,8 @@ export default function OnboardingModal({ onDone }: Props) {
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 200, background: SLIDE_BG[step], transition: "background 0.6s cubic-bezier(0.4,0,0.2,1)", display: "flex", flexDirection: "column", fontFamily: "Manrope, sans-serif", overflowY: "auto" }}>
-      {/* Tap zones */}
-      {step > 0 && step < TOTAL - 1 && (
+      {/* Tap zones — not on the form slide (4): they'd cover the inputs */}
+      {step > 0 && step < 4 && (
         <>
           <div onClick={goPrev} style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "35%", zIndex: 10, cursor: "pointer" }} />
           <div onClick={goNext} style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: "35%", zIndex: 10, cursor: "pointer" }} />
@@ -251,7 +258,7 @@ export default function OnboardingModal({ onDone }: Props) {
       )}
 
       {/* Top bar */}
-      <div style={{ padding: "16px 20px 12px", display: "flex", alignItems: "center", gap: "12px", flexShrink: 0, zIndex: 5, position: "relative" }}>
+      <div style={{ padding: "16px 20px 12px", display: "flex", alignItems: "center", gap: "12px", flexShrink: 0, zIndex: 5, position: "relative", width: "100%", maxWidth: "560px", margin: "0 auto", boxSizing: "border-box" }}>
         {step > 0 && step < TOTAL - 1
           ? <ProgressBar current={step} />
           : <div style={{ flex: 1 }} />
@@ -262,13 +269,13 @@ export default function OnboardingModal({ onDone }: Props) {
       </div>
 
       {/* Slide */}
-      <div key={step} style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, animation: `${dir >= 0 ? "obSlideLeft" : "obSlideRight"} 0.35s cubic-bezier(0.16,1,0.3,1) both`, position: "relative", zIndex: 2 }}>
+      <div key={step} style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, animation: `${dir >= 0 ? "obSlideLeft" : "obSlideRight"} 0.35s cubic-bezier(0.16,1,0.3,1) both`, position: "relative", zIndex: 2, width: "100%", maxWidth: "560px", margin: "0 auto" }}>
         {renderSlide()}
       </div>
 
       {/* Bottom nav */}
       {showBottomNav && (
-        <div style={{ padding: "16px 28px 24px", display: "flex", gap: "10px", flexShrink: 0, position: "relative", zIndex: 5 }}>
+        <div style={{ padding: "16px 28px 24px", display: "flex", gap: "10px", flexShrink: 0, position: "relative", zIndex: 5, width: "100%", maxWidth: "560px", margin: "0 auto", boxSizing: "border-box" }}>
           <button aria-label="Назад" onClick={goPrev} style={{ width: "54px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", height: "54px", borderRadius: "16px", background: "rgba(255,255,255,0.18)", border: "1.5px solid rgba(255,255,255,0.35)", color: "rgba(255,255,255,0.85)", cursor: "pointer" }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
