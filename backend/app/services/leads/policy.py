@@ -5,6 +5,9 @@ from dataclasses import dataclass
 
 DEFAULT_PLAN = "trial"
 
+# Hard ceiling on leads returned per single search run. Bump for higher tiers later.
+MAX_LEADS_PER_SEARCH = 50
+
 
 @dataclass(frozen=True)
 class LeadPlanPolicy:
@@ -42,7 +45,7 @@ def deep_ai_allowed_for_plan(plan: str | None) -> bool:
 
 
 def effective_search_limit(*, requested_limit: int, fast_mode: bool, leads_quota: int | None) -> int:
-    capped_requested = max(1, min(int(requested_limit), 50))
+    capped_requested = max(1, min(int(requested_limit), MAX_LEADS_PER_SEARCH))
     capped = capped_requested
     if leads_quota is None:
         return capped
