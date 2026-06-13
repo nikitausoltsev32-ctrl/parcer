@@ -84,6 +84,10 @@ async def crawl_pages_full(url: str, limit: int = 3) -> list[dict]:
     headers = {"Authorization": f"Bearer {settings.firecrawl_api_key}"}
     pages: list[dict] = []
 
+    # Fallback is a quick rescue, not a full crawl — keep it bounded so it fits
+    # the pipeline crawl budget when httpx returned nothing.
+    fallback_limit = min(limit, 3)
+
     # Always scrape root page
     urls_to_scrape = [url]
     # Add a couple of priority paths to get contacts/about
@@ -91,12 +95,12 @@ async def crawl_pages_full(url: str, limit: int = 3) -> list[dict]:
     parts = urlsplit(url if "://" in url else f"https://{url}")
     root = f"{parts.scheme}://{parts.netloc}"
     for path in ("/contacts", "/kontakty", "/about", "/o-kompanii", "/o-nas"):
-        if len(urls_to_scrape) >= limit:
+        if len(urls_to_scrape) >= fallback_limit:
             break
         urls_to_scrape.append(urljoin(root, path))
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        for page_url in urls_to_scrape[:limit]:
+    async with httpx.AsyncClient(timeout=18) as client:
+        for page_url in urls_to_scrape[:fallback_limit]:
             try:
                 resp = await client.post(
                     f"{_BASE}/scrape",
@@ -104,6 +108,7 @@ async def crawl_pages_full(url: str, limit: int = 3) -> list[dict]:
                     headers=headers,
                 )
                 if resp.status_code != 200:
+                    logger.info("firecrawl crawl_pages_full: %s -> %s", page_url, resp.status_code)
                     continue
                 data = resp.json()
                 markdown = data.get("data", {}).get("markdown", "") or ""
@@ -112,7 +117,9 @@ async def crawl_pages_full(url: str, limit: int = 3) -> list[dict]:
                     html = f"<body><pre>{markdown}</pre></body>"
                     pages.append({"url": page_url, "html": html, "from_firecrawl": True})
             except Exception as exc:
-                logger.warning("firecrawl crawl_pages_full: failed for %s: %s", page_url, exc)
+                logger.warning(
+                    "firecrawl crawl_pages_full: failed for %s: %s", page_url, type(exc).__name__
+                )
 
     logger.info("firecrawl: got %d pages for %s", len(pages), url)
     return pages
@@ -138,5 +145,5 @@ async def enrich_website(url: str) -> str | None:
         logger.info("firecrawl: scraped %s chars from %s", len(text), url)
         return _markdown_to_summary(text)
     except Exception as exc:
-        logger.warning("firecrawl: failed for %s: %s", url, exc)
+        logger.warning("firecrawl: failed for %s: %s", url, exc or type(exc).__name__)
         return None

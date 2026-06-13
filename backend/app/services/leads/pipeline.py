@@ -21,7 +21,7 @@ from app.models.lead_processing_log import LeadProcessingLog
 from app.models.user import User
 from app.services.credits import AI_CREDIT_COSTS, InsufficientCreditsError, check_and_deduct
 from app.services.leads.cache import domain_content_hash, get_cached_lead
-from app.services.leads.crawler import crawl_website
+from app.services.leads.crawler import crawl_budget_seconds, crawl_website
 from app.services.leads.dedup import deduplicate_candidates
 from app.services.leads.deep_ai import run_deep_ai
 from app.services.leads.extraction import (
@@ -35,7 +35,7 @@ from app.services.leads.icp import QueryPlan, build_icp_profile, build_query_pla
 from app.services.leads.icp_filter import reject_by_icp
 from app.services.leads.light_ai import run_light_ai
 from app.services.leads.outreach import generate_outreach
-from app.services.leads.policy import deep_ai_allowed_for_plan, effective_search_limit
+from app.services.leads.policy import MAX_LEADS_PER_SEARCH, deep_ai_allowed_for_plan, effective_search_limit
 from app.services.leads.query_gen import generate_queries
 from app.services.leads.scoring import score_candidate
 from app.services.leads.url_classifier import classify_url
@@ -525,7 +525,7 @@ async def run_lead_search(
     clean_query = " ".join(query.split())
     clean_city = " ".join(city.split()) if city else None
     icp_profile = build_icp_profile(bp, query=clean_query, city=clean_city)
-    requested_limit = max(1, min(limit, 50))
+    requested_limit = max(1, min(limit, MAX_LEADS_PER_SEARCH))
     capped_limit = effective_search_limit(
         requested_limit=requested_limit,
         fast_mode=fast_mode,
@@ -533,7 +533,7 @@ async def run_lead_search(
     )
     candidate_limit = (
         min(
-            50,
+            MAX_LEADS_PER_SEARCH,
             max(capped_limit * (3 if fast_mode else 2), FAST_CANDIDATE_MIN if fast_mode else capped_limit),
         )
         if capped_limit > 0
@@ -928,7 +928,7 @@ async def run_lead_search(
             try:
                 pages = await asyncio.wait_for(
                     _call_crawl_website(website, plan, fast_mode=fast_mode),
-                    timeout=30.0,
+                    timeout=crawl_budget_seconds(plan, fast_mode=fast_mode),
                 )
                 urls_crawled += 1
                 pages_crawled_total += len(pages)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import random
 from urllib.parse import unquote, urljoin, urlsplit
 
@@ -10,6 +11,8 @@ from bs4 import BeautifulSoup
 
 from app.core.config import settings
 from app.services.leads.policy import page_limit_for_plan
+
+logger = logging.getLogger(__name__)
 
 _PRIORITY_PATHS = [
     "/", "/contacts", "/kontakty", "/contact", "/kontakt",
@@ -122,21 +125,41 @@ def _extract_contact_links(html: str, base_url: str, limit: int = 3) -> list[str
     return links
 
 
-async def _fetch_one(client: httpx.AsyncClient, url: str, timeout: float = 15.0) -> str | None:
+# Per-page fetch timeout. Kept tight so one slow page can't eat the whole
+# crawl budget (see crawl_budget_seconds).
+_PAGE_TIMEOUT = 10.0
+_FAST_PAGE_TIMEOUT = 8.0
+_DELAY_RANGE = (0.5, 1.2)
+_FAST_DELAY_RANGE = (0.2, 0.5)
+
+
+def crawl_budget_seconds(plan: str = "trial", *, fast_mode: bool = False) -> float:
+    """Wall-clock budget the pipeline should allow crawl_website, sized to the
+    sequential per-page timeout + politeness delays so it doesn't kill crawls
+    that would otherwise succeed. Capped to bound worst-case runtime."""
+    pages = min(_page_limit(plan), 2) if fast_mode else _page_limit(plan)
+    per_page = _FAST_PAGE_TIMEOUT if fast_mode else _PAGE_TIMEOUT
+    max_delay = _FAST_DELAY_RANGE[1] if fast_mode else _DELAY_RANGE[1]
+    budget = pages * per_page + max(0, pages - 1) * max_delay + 8.0
+    return min(budget, 75.0)
+
+
+async def _fetch_one(client: httpx.AsyncClient, url: str, timeout: float = _PAGE_TIMEOUT) -> str | None:
     try:
         resp = await client.get(url, timeout=timeout, follow_redirects=True)
         if resp.status_code == 200 and "text/html" in resp.headers.get("content-type", ""):
             return resp.text
-    except Exception:
-        pass
+        logger.info("crawler: %s returned %s (%s)", url, resp.status_code, resp.headers.get("content-type", "?"))
+    except Exception as exc:
+        logger.info("crawler: fetch failed for %s: %s", url, type(exc).__name__)
     return None
 
 
 async def crawl_website(website: str, plan: str = "trial", *, fast_mode: bool = False) -> list[dict]:
     """Returns list of {url, html} dicts for successfully fetched pages."""
     limit = min(_page_limit(plan), 2) if fast_mode else _page_limit(plan)
-    timeout = 8.0 if fast_mode else 15.0
-    delay_range = (0.2, 0.5) if fast_mode else (0.8, 2.0)
+    timeout = _FAST_PAGE_TIMEOUT if fast_mode else _PAGE_TIMEOUT
+    delay_range = _FAST_DELAY_RANGE if fast_mode else _DELAY_RANGE
     urls = _candidate_urls(website, limit)
     pages: list[dict] = []
 
