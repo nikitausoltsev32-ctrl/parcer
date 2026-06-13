@@ -94,3 +94,60 @@ def compute_funnel(
         score_70_plus=score_70,
         source_counts=source_counts,
     )
+
+
+SERP_SOURCES = frozenset({"serp_maps", "serp_google"})
+LLM_SOURCES = frozenset({"perplexity", "llm_search"})
+
+
+def _serp_count(stats: FunnelStats) -> int:
+    return sum(count for src, count in stats.source_counts.items() if src in SERP_SOURCES)
+
+
+def _llm_count(stats: FunnelStats) -> int:
+    return sum(count for src, count in stats.source_counts.items() if src in LLM_SOURCES)
+
+
+def funnel_to_csv_rows(stats_list: list[FunnelStats]) -> list[dict]:
+    rows: list[dict] = []
+    for stats in stats_list:
+        rows.append(
+            {
+                "niche": stats.niche,
+                "city": stats.city or "",
+                "urls_found": stats.urls_found,
+                "urls_after_filter": stats.urls_after_filter,
+                "urls_crawled": stats.urls_crawled,
+                "pages_crawled": stats.pages_crawled,
+                "serp_prescreened_out": stats.serp_prescreened_out,
+                "icp_rejected_out": stats.icp_rejected_out,
+                "history_skipped_out": stats.history_skipped_out,
+                "saved": stats.saved,
+                "with_any_channel": stats.with_any_channel,
+                "with_email": stats.with_email,
+                "with_personal_email": stats.with_personal_email,
+                "score_70_plus": stats.score_70_plus,
+                "serp_count": _serp_count(stats),
+                "llm_count": _llm_count(stats),
+                "source_counts": ", ".join(f"{k}={v}" for k, v in sorted(stats.source_counts.items())),
+            }
+        )
+    return rows
+
+
+def format_funnel_table(stats_list: list[FunnelStats]) -> str:
+    header = (
+        f"{'niche':<28} {'city':<16} {'found':>6} {'filter':>6} {'crawl':>6} "
+        f"{'saved':>6} {'channel':>8} {'email':>6} {'personal':>9} {'score70':>8} "
+        f"{'serp':>5} {'llm':>5}"
+    )
+    lines = [header, "-" * len(header)]
+    for stats in stats_list:
+        lines.append(
+            f"{stats.niche[:27]:<28} {(stats.city or '')[:15]:<16} "
+            f"{stats.urls_found:>6} {stats.urls_after_filter:>6} {stats.urls_crawled:>6} "
+            f"{stats.saved:>6} {stats.with_any_channel:>8} {stats.with_email:>6} "
+            f"{stats.with_personal_email:>9} {stats.score_70_plus:>8} "
+            f"{_serp_count(stats):>5} {_llm_count(stats):>5}"
+        )
+    return "\n".join(lines)

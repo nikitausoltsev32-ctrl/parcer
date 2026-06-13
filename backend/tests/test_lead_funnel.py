@@ -91,3 +91,47 @@ def test_compute_funnel_buckets_unknown_source():
         leads=[{"score": 10}],
     )
     assert stats.source_counts == {"unknown": 1}
+
+
+from app.services.leads.funnel import format_funnel_table, funnel_to_csv_rows
+
+
+def _stats_fixture():
+    return compute_funnel(
+        "стоматологии",
+        "Екатеринбург",
+        urls_found=200,
+        urls_after_filter=80,
+        urls_crawled=20,
+        pages_crawled=60,
+        serp_prescreened_out=12,
+        icp_rejected_out=30,
+        history_skipped_out=4,
+        leads=[
+            {"source": "serp_maps", "email": "ivan@a.ru", "score": 82},
+            {"source": "perplexity", "email": "info@b.ru", "score": 40},
+        ],
+    )
+
+
+def test_funnel_to_csv_rows_splits_serp_and_llm_sources():
+    rows = funnel_to_csv_rows([_stats_fixture()])
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["niche"] == "стоматологии"
+    assert row["city"] == "Екатеринбург"
+    assert row["urls_found"] == 200
+    assert row["urls_after_filter"] == 80
+    assert row["saved"] == 2
+    assert row["with_any_channel"] == 2
+    assert row["with_personal_email"] == 1
+    assert row["score_70_plus"] == 1
+    assert row["serp_count"] == 1
+    assert row["llm_count"] == 1
+
+
+def test_format_funnel_table_contains_niche_and_numbers():
+    table = format_funnel_table([_stats_fixture()])
+    assert "стоматологии" in table
+    assert "200" in table
+    assert "saved" in table.lower()
