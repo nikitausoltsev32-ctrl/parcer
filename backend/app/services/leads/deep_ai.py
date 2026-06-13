@@ -102,6 +102,24 @@ async def run_deep_ai(
     if text.startswith("```"):
         text = text.split("```")[1].lstrip("json").strip()
     try:
-        return json.loads(text)
+        data = json.loads(text)
     except Exception:
         return {}
+    return _coerce_scalar_strings(data)
+
+
+_SCALAR_STRING_FIELDS = (
+    "company_name", "city", "region", "address", "industry", "description",
+    "reason_to_contact", "email", "phone", "telegram", "whatsapp", "vk", "instagram",
+)
+
+
+def _coerce_scalar_strings(data: dict) -> dict:
+    if not isinstance(data, dict):
+        return {}
+    for field in _SCALAR_STRING_FIELDS:
+        value = data.get(field)
+        if isinstance(value, list):
+            parts = [str(item).strip() for item in value if item not in (None, "")]
+            data[field] = ", ".join(parts) or None
+    return data
