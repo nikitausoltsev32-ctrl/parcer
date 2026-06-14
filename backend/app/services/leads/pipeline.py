@@ -26,15 +26,18 @@ from app.services.leads.dedup import deduplicate_candidates
 from app.services.leads.deep_ai import run_deep_ai
 from app.services.leads.extraction import (
     extract_public_contacts,
+    harvest_emails,
+    harvest_phones,
     normalize_domain,
     normalize_website,
 )
 from app.services.leads.history_filter import check_candidate_history
 from app.services.leads.html_extraction import extract_from_html
-from app.services.leads.icp import QueryPlan, build_icp_profile, build_query_plan_from_queries
+from app.services.leads.icp import QueryPlan, build_query_plan_from_queries
 from app.services.leads.icp_filter import reject_by_icp
+from app.services.leads.icp_parser import parse_icp
 from app.services.leads.light_ai import run_light_ai
-from app.services.leads.outreach import generate_outreach
+from app.services.leads.outreach import generate_outreach, template_outreach
 from app.services.leads.policy import MAX_LEADS_PER_SEARCH, deep_ai_allowed_for_plan, effective_search_limit
 from app.services.leads.query_gen import generate_queries
 from app.services.leads.scoring import score_candidate
@@ -524,7 +527,7 @@ async def run_lead_search(
     plan = user.plan or "trial"
     clean_query = " ".join(query.split())
     clean_city = " ".join(city.split()) if city else None
-    icp_profile = build_icp_profile(bp, query=clean_query, city=clean_city)
+    icp_profile = await parse_icp(clean_query, bp, clean_city, log=log, model_override=ai_model)
     requested_limit = max(1, min(limit, MAX_LEADS_PER_SEARCH))
     capped_limit = effective_search_limit(
         requested_limit=requested_limit,
@@ -955,14 +958,22 @@ async def run_lead_search(
 
         # STEP 7 — Basic HTML Extraction
         extracted: dict = {}
+        harvested_email: str | None = None
+        harvested_phone: str | None = None
         if pages:
             combined_html = "\n".join(p.get("html", "") for p in pages[:3])
             extracted = extract_from_html(combined_html, website or "")
+            # Contacts may live on a deep /contacts page beyond the first 3 — harvest across all.
+            all_pages_html = "\n".join(p.get("html", "") for p in pages)
+            ranked_emails = harvest_emails(all_pages_html)
+            harvested_email = ranked_emails[0] if ranked_emails else None
+            harvested_phones = harvest_phones(all_pages_html)
+            harvested_phone = harvested_phones[0] if harvested_phones else None
 
         # Base contacts (prefer raw search data over extraction)
         contacts = {
-            "email": raw.get("email") or extracted.get("email"),
-            "phone": raw.get("phone") or extracted.get("phone"),
+            "email": raw.get("email") or harvested_email or extracted.get("email"),
+            "phone": raw.get("phone") or harvested_phone or extracted.get("phone"),
             "telegram": extracted.get("social_links", {}).get("telegram") or raw.get("telegram"),
             "whatsapp": extracted.get("social_links", {}).get("whatsapp") or raw.get("whatsapp"),
             "vk": extracted.get("social_links", {}).get("vk") or raw.get("vk"),
@@ -1248,6 +1259,16 @@ async def run_lead_search(
                     )
                 except Exception:
                     outreach_data = {}
+
+        # Template fallback — light/basic leads still get a starter message (no credits)
+        if generate_outreach_messages and not outreach_data:
+            outreach_data = template_outreach(
+                service_offered=service_offered,
+                company_name=deep_data.get("company_name") or _clean_company_name(raw.get("name")) or raw.get("name"),
+                industry=deep_data.get("industry") or (light_result.industry if light_result else None),
+                description=description,
+                reason_to_contact=deep_data.get("reason_to_contact") or (light_result.hook if light_result else None),
+            )
 
         # Build Lead record
         content_hash = domain_content_hash("\n".join(p.get("html", "") for p in pages)) if pages else None

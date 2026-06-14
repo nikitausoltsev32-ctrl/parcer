@@ -3,16 +3,9 @@ from urllib.parse import unquote, urlsplit
 import httpx
 
 from app.core.config import settings
+from app.services.leads.url_filter import BLOCKED_DOMAINS as _AGGREGATOR_DOMAINS
 
 _BASE = "https://serpapi.com/search"
-
-_AGGREGATOR_DOMAINS = {
-    "2gis.ru", "zoon.ru", "avito.ru", "yell.ru", "flamp.ru",
-    "yandex.ru", "yandex.com", "vk.com", "ok.ru", "headhunter.ru",
-    "hh.ru", "profi.ru", "tiu.ru", "tripadvisor.ru", "tripadvisor.com",
-    "otzovik.com", "irecommend.ru", "turbopages.org", "yelp.com",
-    "google.com", "maps.google.com",
-}
 
 _AGGREGATOR_WORDS = {
     "рейтинг", "топ", "лучшие", "лучших", "обзор", "каталог", "список",
@@ -46,6 +39,13 @@ def _domain_from_url(url: str | None) -> str:
         return ""
     url = url.removeprefix("https://").removeprefix("http://").removeprefix("www.")
     return url.split("/")[0].lower()
+
+
+def _is_aggregator_domain(domain: str) -> bool:
+    """Match the domain itself or any subdomain (e.g. ``ekb.docdoc.ru``)."""
+    if not domain:
+        return False
+    return any(domain == agg or domain.endswith("." + agg) for agg in _AGGREGATOR_DOMAINS)
 
 
 def _summary_from_item(item: dict) -> str | None:
@@ -177,7 +177,7 @@ async def search_google(query: str, city: str | None = None, limit: int = 20) ->
         title = item.get("title", "")
         snippet = item.get("snippet", "")
         domain = _domain_from_url(link)
-        if domain in _AGGREGATOR_DOMAINS:
+        if _is_aggregator_domain(domain):
             continue
         if _is_blocked_organic_result(link, title, snippet):
             continue

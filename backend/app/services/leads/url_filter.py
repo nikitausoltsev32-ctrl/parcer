@@ -1,21 +1,26 @@
 ﻿import re
 from urllib.parse import unquote, urlsplit
 
+# Canonical aggregator/marketplace/directory blocklist for the whole lead pipeline.
+# search/serp.py and search/yandex.py import this set — keep it the single source of truth
+# so the two layers never drift (that drift was how medical aggregators leaked into results).
 BLOCKED_DOMAINS = {
-    'avito.ru',
-    'hh.ru',
-    'vc.ru',
-    'habr.com',
-    '2gis.ru',
-    'wildberries.ru',
-    'zoon.ru',
-    'otzovik.com',
-    'prodoctorov.ru',
-    'yell.ru',
-    'flamp.ru',
-    'ozon.ru',
-    'market.yandex.ru',
-    'irecommend.ru',
+    # Marketplaces / classifieds / media
+    'avito.ru', 'ozon.ru', 'wildberries.ru', 'market.yandex.ru', 'tiu.ru',
+    'vc.ru', 'habr.com', 'kp.ru',
+    # Search engines / social / aggregated maps
+    'yandex.ru', 'yandex.com', 'google.com', 'maps.google.com',
+    '2gis.ru', '0gis.ru', 'vk.com', 'ok.ru', 'turbopages.org',
+    # Job boards / freelance
+    'hh.ru', 'headhunter.ru', 'profi.ru',
+    # Reviews / directories / business catalogs
+    'zoon.ru', 'yell.ru', 'flamp.ru', 'otzovik.com', 'irecommend.ru',
+    'tripadvisor.ru', 'tripadvisor.com', 'yelp.com',
+    'rusprofile.ru', 'list-org.com', 'orgpage.ru', 'spr.ru',
+    'blizko.ru', 'gorko.ru', 'cataloxy.ru', 'vbk.ru',
+    # Medical aggregators / booking
+    'prodoctorov.ru', 'napopravku.ru', 'docdoc.ru', 'sberhealth.ru',
+    '32top.ru', 'doctu.ru', 'emex.ru', 'medbooking.com', 'infodoctor.ru',
 }
 
 BLOCKED_PATH_PARTS = (

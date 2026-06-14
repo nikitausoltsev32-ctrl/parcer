@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -85,14 +86,14 @@ def reject_by_icp(
     if not text.strip():
         return None
 
-    negative_terms = _present_terms(
+    negative_terms = _present_reject_terms(
         text,
         [
             *icp.negative_keywords,
             *[term for term in query_plan.negative_keywords if _is_icp_negative(term)],
         ],
     )
-    excluded_terms = _present_terms(text, [*icp.excluded_industries, *query_plan.excluded_industries])
+    excluded_terms = _present_reject_terms(text, [*icp.excluded_industries, *query_plan.excluded_industries])
     if negative_terms or excluded_terms:
         return ICPReject(
             reason="excluded_keyword" if negative_terms else "excluded_industry",
@@ -122,6 +123,20 @@ def _present_terms(text: str, terms: list[str]) -> list[str]:
         if not cleaned:
             continue
         if cleaned in text:
+            found.append(cleaned)
+    return _dedupe(found)
+
+
+def _present_reject_terms(text: str, terms: list[str]) -> list[str]:
+    """Reject terms (negative/excluded) anchor at a word start so a short LLM stem like
+    "сад" can't false-match inside "фасад" and drop a valid lead — while still allowing
+    stem+suffix matches ("удобр" → "удобрения")."""
+    found: list[str] = []
+    for term in terms:
+        cleaned = " ".join(str(term or "").casefold().split())
+        if not cleaned:
+            continue
+        if re.search(r"(?<!\w)" + re.escape(cleaned), text):
             found.append(cleaned)
     return _dedupe(found)
 

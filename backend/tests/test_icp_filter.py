@@ -1,14 +1,23 @@
 from app.services.leads.icp import QueryPlan, build_icp_profile, build_query_plan_from_queries
 from app.services.leads.icp_filter import has_positive_icp_evidence, reject_by_icp
 
+_STORED_ICP = {
+    "seller_summary": "Поставщик мраморной крошки и минеральных наполнителей",
+    "products": ["мраморная крошка", "минеральные наполнители"],
+    "buyer_segments": [
+        "производители ЖБИ",
+        "производители тротуарной плитки",
+        "производители декоративного бетона",
+    ],
+    "positive_keywords": ["жби", "бетон", "тротуарная плитка", "декоративный бетон"],
+    "negative_keywords": ["удобр", "агрохим", "npk", "сульфат калия"],
+    "excluded_industries": ["минеральные удобрения", "агрохимия"],
+}
 
-def test_amp_minerals_icp_rejects_agro_fertilizer_results():
+
+def test_stored_icp_rejects_agro_fertilizer_results():
     icp = build_icp_profile(
-        {
-            "business": "AMP Minerals",
-            "offer": "Продажа мраморной крошки и минеральных наполнителей",
-            "website": "https://amp-minerals.ru",
-        },
+        {"business": "AMP Minerals", "offer": "Продажа мраморной крошки", "icp": _STORED_ICP},
         query="покупатели мраморной крошки",
         city=None,
     )
@@ -26,12 +35,9 @@ def test_amp_minerals_icp_rejects_agro_fertilizer_results():
     assert any("удобр" in term or "npk" in term for term in reject.matched_terms)
 
 
-def test_amp_minerals_icp_keeps_concrete_and_paving_tile_buyers():
+def test_stored_icp_keeps_concrete_and_paving_tile_buyers():
     icp = build_icp_profile(
-        {
-            "business": "AMP Minerals",
-            "offer": "Мраморная крошка для декоративного бетона",
-        },
+        {"business": "AMP Minerals", "offer": "Мраморная крошка для бетона", "icp": _STORED_ICP},
         query="производители бетона и тротуарной плитки",
         city=None,
     )
@@ -46,9 +52,49 @@ def test_amp_minerals_icp_keeps_concrete_and_paving_tile_buyers():
     assert has_positive_icp_evidence(buyer, icp=icp, query_plan=plan) is True
 
 
+def test_short_negative_stem_does_not_false_match_inside_word():
+    # LLM may emit a short negative stem like "сад" (садоводство). It must NOT reject a
+    # facade-materials maker ("фасад" contains "сад") — that's a valid marble buyer.
+    icp = build_icp_profile(
+        {"business": "AMP Minerals", "offer": "Мраморная крошка", "icp": _STORED_ICP},
+        query="производители фасадных материалов",
+        city=None,
+    )
+    plan = QueryPlan(
+        queries=["фасадные штукатурки мраморная крошка"],
+        negative_keywords=["сад", "корм"],
+        buyer_segments=icp.buyer_segments,
+        excluded_industries=icp.excluded_industries,
+        positive_keywords=icp.positive_keywords,
+    )
+    buyer = {
+        "name": "ФасадСтрой",
+        "website": "https://fasad.test",
+        "website_summary": "Производство фасадных штукатурок и декоративного бетона.",
+    }
+    assert reject_by_icp(buyer, icp=icp, query_plan=plan) is None
+
+
+def test_negative_stem_still_matches_at_word_start_with_suffix():
+    icp = build_icp_profile(
+        {"business": "AMP Minerals", "offer": "Мраморная крошка", "icp": _STORED_ICP},
+        query="мраморная крошка",
+        city=None,
+    )
+    plan = build_query_plan_from_queries(["мраморная крошка"], icp)
+    agro = {
+        "name": "АгроМикс",
+        "website": "https://agromix.test",
+        "website_summary": "Удобрения и почвосмеси для урожая.",  # "Удобрения" starts with stem "удобр"
+    }
+    reject = reject_by_icp(agro, icp=icp, query_plan=plan)
+    assert reject is not None
+    assert "удобр" in reject.matched_terms
+
+
 def test_icp_filter_ignores_generic_web_noise_negative_terms():
     icp = build_icp_profile(
-        {"business": "AMP Minerals", "offer": "Мраморная крошка"},
+        {"business": "AMP Minerals", "offer": "Мраморная крошка", "icp": _STORED_ICP},
         query="производители ЖБИ",
         city=None,
     )

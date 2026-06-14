@@ -22,11 +22,6 @@ def _clean_list(values: Any) -> list[str]:
     return result
 
 
-def _contains_any(text: str, terms: tuple[str, ...]) -> bool:
-    folded = text.casefold()
-    return any(term in folded for term in terms)
-
-
 @dataclass(frozen=True)
 class ICPProfile:
     seller_summary: str
@@ -89,83 +84,6 @@ class QueryList(list[str]):
         self.query_plan = query_plan
 
 
-_MARBLE_MARKERS = (
-    "мрамор",
-    "marble",
-    "крошк",
-    "amp-minerals",
-    "карбонат кальция",
-    "кальцит",
-    "минеральн",
-)
-
-_MARBLE_PRODUCTS = [
-    "мраморная крошка",
-    "минеральные наполнители",
-    "карбонат кальция",
-    "декоративные минеральные материалы",
-]
-
-_MARBLE_BUYERS = [
-    "производители ЖБИ",
-    "производители тротуарной плитки",
-    "производители декоративного бетона",
-    "производители сухих строительных смесей",
-    "производители штукатурок и фасадных материалов",
-    "производители искусственного камня и терраццо",
-    "ландшафтные и благоустроительные компании",
-]
-
-_MARBLE_USE_CASES = [
-    "заполнитель для бетона",
-    "декоративная отделка бетона",
-    "тротуарная плитка",
-    "фасадные штукатурки",
-    "сухие строительные смеси",
-    "ландшафтное благоустройство",
-]
-
-_MARBLE_POSITIVE = [
-    "жби",
-    "бетон",
-    "тротуарная плитка",
-    "декоративный бетон",
-    "сухие смеси",
-    "штукатурка",
-    "фасад",
-    "терраццо",
-    "искусственный камень",
-    "благоустройство",
-    "ландшафт",
-    "строительные смеси",
-    "производство плитки",
-]
-
-_MARBLE_NEGATIVE = [
-    "удобр",
-    "агрохим",
-    "npk",
-    "сульфат калия",
-    "аммиачная селитра",
-    "почвосмесь",
-    "грунт для растений",
-    "семена",
-    "пестиц",
-    "фунгиц",
-    "гербиц",
-    "урожай",
-    "кормовая добавка",
-]
-
-_MARBLE_EXCLUDED = [
-    "минеральные удобрения",
-    "агрохимия",
-    "садовые и сельскохозяйственные товары",
-    "семена и почвенные смеси",
-    "корма и ветеринарные добавки",
-]
-
-
 def build_icp_profile(
     business_profile: dict[str, Any] | None,
     *,
@@ -174,20 +92,6 @@ def build_icp_profile(
 ) -> ICPProfile:
     bp = dict(business_profile or {})
     stored = bp.get("icp") if isinstance(bp.get("icp"), dict) else {}
-    text = " ".join(
-        _clean(part)
-        for part in [
-            bp.get("business"),
-            bp.get("offer"),
-            bp.get("website"),
-            bp.get("website_url"),
-            query,
-            city,
-            stored.get("seller_summary"),
-            " ".join(_clean_list(stored.get("products"))),
-        ]
-        if part
-    )
 
     products = _clean_list(stored.get("products"))
     buyer_segments = _clean_list(stored.get("buyer_segments"))
@@ -195,14 +99,6 @@ def build_icp_profile(
     positive_keywords = _clean_list(stored.get("positive_keywords"))
     negative_keywords = _clean_list(stored.get("negative_keywords"))
     excluded_industries = _clean_list(stored.get("excluded_industries"))
-
-    if _contains_any(text, _MARBLE_MARKERS):
-        products = _merge(products, _MARBLE_PRODUCTS)
-        buyer_segments = _merge(buyer_segments, _MARBLE_BUYERS)
-        use_cases = _merge(use_cases, _MARBLE_USE_CASES)
-        positive_keywords = _merge(positive_keywords, _MARBLE_POSITIVE)
-        negative_keywords = _merge(negative_keywords, _MARBLE_NEGATIVE)
-        excluded_industries = _merge(excluded_industries, _MARBLE_EXCLUDED)
 
     summary = _clean(stored.get("seller_summary")) or _clean(
         f"{bp.get('business', '')}. {bp.get('offer', '')}. Query: {query}."
@@ -239,10 +135,6 @@ def build_query_plan_from_queries(queries: list[str], icp: ICPProfile, rationale
         positive_keywords=icp.positive_keywords,
         rationale=rationale,
     )
-
-
-def _merge(left: list[str], right: list[str]) -> list[str]:
-    return _dedupe([*left, *right])
 
 
 def _dedupe(values: list[str]) -> list[str]:

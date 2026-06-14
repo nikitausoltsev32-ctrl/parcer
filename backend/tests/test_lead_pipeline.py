@@ -543,7 +543,7 @@ async def test_run_lead_search_classifies_only_border_urls(monkeypatch, db_sessi
     assert "https://contact.test/contacts" in websites
     assert "https://border.test/company/profile/123" in websites
     assert "https://article.test/company/profile/123" not in websites
-    assert all(entry["stage"] == "url_classify" for entry in log.llm_calls)
+    assert all(entry["stage"] in {"url_classify", "query_gen"} for entry in log.llm_calls)
 
 
 async def test_run_lead_search_prescreens_serp_listicles_before_crawler(monkeypatch, db_session):
