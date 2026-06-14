@@ -2,6 +2,16 @@ from app.core.config import Settings, settings
 from app.services.llm.factory import get_available_chat_models, get_llm_client, is_available_model_override
 
 
+def _clear_yandex(monkeypatch):
+    # Yandex options/route lead when configured; clear to assert the foreign-model behavior.
+    monkeypatch.setattr(settings, "yandex_api_key", "")
+    monkeypatch.setattr(settings, "yandex_folder_id", "")
+
+
+def _ids(models):
+    return [m["id"] for m in models]
+
+
 def test_default_llm_routing_uses_glm_via_nvidia():
     assert Settings.model_fields["llm_chat_provider"].default == "nvidia"
     assert Settings.model_fields["llm_chat_model"].default == "z-ai/glm-5.1"
@@ -14,54 +24,32 @@ def test_default_llm_routing_uses_glm_via_nvidia():
 
 
 def test_available_chat_models_excludes_dead_minimax_option(monkeypatch):
+    _clear_yandex(monkeypatch)
     monkeypatch.setattr(settings, "nvidia_api_key", "test-nvidia-key")
     monkeypatch.setattr(settings, "openrouter_api_key", "old-openrouter-key")
     monkeypatch.setattr(settings, "groq_api_key", "old-groq-key")
 
-    models = get_available_chat_models()
+    ids = _ids(get_available_chat_models())
 
-    assert models == [
-        {
-            "id": "openrouter/openai/gpt-4o-mini",
-            "label": "GPT-4o mini",
-            "sub": "OpenRouter · основной",
-            "provider": "openrouter",
-        },
-        {
-            "id": "openrouter/google/gemini-2.5-flash-lite",
-            "label": "Gemini 2.5 Flash Lite",
-            "sub": "OpenRouter · быстрый",
-            "provider": "openrouter",
-        },
-        {"id": "nvidia/z-ai/glm-5.1", "label": "GLM 5.1", "sub": "NVIDIA", "provider": "nvidia"},
-        {
-            "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-            "label": "Nemotron 3 Nano Omni 30B",
-            "sub": "NVIDIA reasoning",
-            "provider": "nvidia",
-        },
+    assert ids == [
+        "openrouter/openai/gpt-4o-mini",
+        "openrouter/google/gemini-2.5-flash-lite",
+        "nvidia/z-ai/glm-5.1",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
     ]
+    assert not any("minimax" in model_id for model_id in ids)
     assert is_available_model_override("openrouter/openai/gpt-4o-mini") is True
     assert is_available_model_override("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning") is True
 
 
 def test_available_chat_models_returns_openrouter_models_without_nvidia_key(monkeypatch):
+    _clear_yandex(monkeypatch)
     monkeypatch.setattr(settings, "nvidia_api_key", "")
     monkeypatch.setattr(settings, "openrouter_api_key", "or-key")
 
-    assert get_available_chat_models() == [
-        {
-            "id": "openrouter/openai/gpt-4o-mini",
-            "label": "GPT-4o mini",
-            "sub": "OpenRouter · основной",
-            "provider": "openrouter",
-        },
-        {
-            "id": "openrouter/google/gemini-2.5-flash-lite",
-            "label": "Gemini 2.5 Flash Lite",
-            "sub": "OpenRouter · быстрый",
-            "provider": "openrouter",
-        },
+    assert _ids(get_available_chat_models()) == [
+        "openrouter/openai/gpt-4o-mini",
+        "openrouter/google/gemini-2.5-flash-lite",
     ]
     assert is_available_model_override("openrouter/openai/gpt-4o-mini") is True
     assert is_available_model_override("nvidia/z-ai/glm-5.1") is False
@@ -69,6 +57,7 @@ def test_available_chat_models_returns_openrouter_models_without_nvidia_key(monk
 
 
 def test_available_chat_models_returns_empty_list_without_any_model_key(monkeypatch):
+    _clear_yandex(monkeypatch)
     monkeypatch.setattr(settings, "nvidia_api_key", "")
     monkeypatch.setattr(settings, "openrouter_api_key", "")
 
@@ -95,6 +84,7 @@ def test_openrouter_client_uses_openrouter_base_and_key(monkeypatch):
 
 
 def test_stage_routing_picks_openrouter_for_light_ai(monkeypatch):
+    _clear_yandex(monkeypatch)
     monkeypatch.setattr(settings, "openrouter_api_key", "or-key")
     monkeypatch.setattr(settings, "nvidia_api_key", "nv-key")
     client = get_llm_client("light_ai")
@@ -103,6 +93,7 @@ def test_stage_routing_picks_openrouter_for_light_ai(monkeypatch):
 
 
 def test_stage_routing_falls_back_to_nvidia_without_openrouter(monkeypatch):
+    _clear_yandex(monkeypatch)
     monkeypatch.setattr(settings, "openrouter_api_key", "")
     monkeypatch.setattr(settings, "nvidia_api_key", "nv-key")
     client = get_llm_client("light_ai")

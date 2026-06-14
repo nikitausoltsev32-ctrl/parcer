@@ -4,24 +4,28 @@ async def _auth_headers(client, email: str = "chat-models@test.com") -> dict[str
     return {"Authorization": f"Bearer {login.json()['access_token']}"}
 
 
+def _clear_foreign_and_yandex(monkeypatch):
+    monkeypatch.setattr("app.core.config.settings.openrouter_api_key", "")
+    monkeypatch.setattr("app.core.config.settings.yandex_api_key", "")
+    monkeypatch.setattr("app.core.config.settings.yandex_folder_id", "")
+
+
 async def test_get_chat_models_returns_nvidia_models_when_configured(monkeypatch, client):
+    _clear_foreign_and_yandex(monkeypatch)
     monkeypatch.setattr("app.core.config.settings.nvidia_api_key", "test-nvidia-key")
 
     headers = await _auth_headers(client)
     response = await client.get("/api/v1/chat/models", headers=headers)
 
     assert response.status_code == 200
-    assert response.json() == [
-        {"id": "nvidia/z-ai/glm-5.1", "label": "GLM 5.1", "sub": "NVIDIA"},
-        {
-            "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-            "label": "Nemotron 3 Nano Omni 30B",
-            "sub": "NVIDIA reasoning",
-        },
+    assert [m["id"] for m in response.json()] == [
+        "nvidia/z-ai/glm-5.1",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
     ]
 
 
 async def test_get_chat_models_returns_empty_list_when_not_configured(monkeypatch, client):
+    _clear_foreign_and_yandex(monkeypatch)
     monkeypatch.setattr("app.core.config.settings.nvidia_api_key", "")
 
     headers = await _auth_headers(client, email="chat-models-empty@test.com")

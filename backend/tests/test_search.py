@@ -34,6 +34,8 @@ async def test_search_companies_returns_google_maps_results(monkeypatch):
     monkeypatch.setattr(search_module, "enrich_website", fake_enrich)
     monkeypatch.setattr(search_module, "llm_search_companies", no_discovery)
     monkeypatch.setattr(search_module, "perplexity_search_companies", no_discovery)
+    monkeypatch.setattr(search_module, "search_yandex", no_discovery)
+    monkeypatch.setattr(search_module, "yandex_search_available", lambda: False)
 
     results = await search_module.search_companies("design studios", "Kazan", 5)
 
@@ -243,6 +245,11 @@ async def test_search_uses_perplexity_when_openrouter_key_present(monkeypatch):
     from app.core.config import settings
 
     monkeypatch.setattr(settings, "openrouter_api_key", "or-key")
+    # LLM discovery (perplexity/Sonar) is opt-in — enable it to exercise this path.
+    monkeypatch.setattr(settings, "enable_llm_discovery", True)
+    # Disable real Yandex Search so it can't crowd perplexity out of the merged result.
+    monkeypatch.setattr(settings, "yandex_api_key", "")
+    monkeypatch.setattr(settings, "yandex_folder_id", "")
 
     async def fake_serp(*a, **k): return []
     async def fake_google(*a, **k): return []
