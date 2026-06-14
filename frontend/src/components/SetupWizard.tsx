@@ -158,7 +158,7 @@ export default function SetupWizard({ onDone, initialBusiness, initialCity }: Pr
                   padding: "12px 14px",
                   cursor: "pointer",
                   background: tone === t.id ? `color-mix(in oklch, ${SAGE} 8%, white)` : "white",
-                  transition: "all 0.15s",
+                  transition: "background 0.15s, border-color 0.15s",
                   display: "flex",
                   alignItems: "center",
                   gap: "12px",

@@ -137,7 +137,7 @@ export default function InboxPage() {
                     border: active ? `1px solid rgba(26,37,64,0.25)` : G.border,
                     background: active ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.40)",
                     backdropFilter: "blur(10px)",
-                    transition: "all 0.12s",
+                    transition: "background 0.12s, border-color 0.12s, box-shadow 0.12s",
                     boxShadow: active ? G.shadowCard : "none",
                   }}
                 >

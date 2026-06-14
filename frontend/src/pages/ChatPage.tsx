@@ -13,6 +13,7 @@ interface ChatModel {
   label: string;
   sub: string;
   provider?: string;
+  hint?: string;
 }
 
 interface ToolStep {
@@ -279,7 +280,7 @@ function LeadResultsCard({ companies, onSaveRequest }: { companies: Company[]; o
             cursor: "pointer",
             fontFamily: "inherit",
             boxShadow: G.shadowBtn,
-            transition: "all 0.15s",
+            transition: "background 0.15s, box-shadow 0.15s",
           }}
         >
           <Save size={12} strokeWidth={2} />
@@ -376,7 +377,11 @@ function ModelSelector({ models, value, onChange }: {
 
   useEffect(() => {
     if (!open) return;
-    function dismiss() { setOpen(false); }
+    function dismiss(e?: Event) {
+      // Ignore scroll inside the menu itself — it's now scrollable.
+      if (e && menuRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    }
     window.addEventListener("resize", dismiss);
     window.addEventListener("scroll", dismiss, true);
     return () => {
@@ -420,12 +425,15 @@ function ModelSelector({ models, value, onChange }: {
         <div ref={menuRef} style={{
           position: "fixed",
           left: Math.max(8, Math.min(anchor.left, window.innerWidth - 288)),
-          bottom: window.innerHeight - anchor.top + 6,
+          top: anchor.bottom + 6,
+          maxHeight: Math.max(180, window.innerHeight - anchor.bottom - 16),
           background: "rgba(245,248,252,0.96)",
           backdropFilter: G.blurHeavy, WebkitBackdropFilter: G.blurHeavy,
           border: G.border, borderRadius: G.radiusSm,
           boxShadow: G.shadowModal,
-          overflow: "hidden", minWidth: "280px", zIndex: 1000,
+          overflowY: "auto", minWidth: "320px", maxWidth: "360px", zIndex: 1000,
+          transformOrigin: "top center",
+          animation: "dropDown 0.16s ease",
         }}>
           <div style={{ padding: "9px 12px 5px", fontSize: "10px", fontWeight: 700, color: G.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Модель маршрута</div>
           {models.map((m) => (
@@ -433,7 +441,7 @@ function ModelSelector({ models, value, onChange }: {
               key={m.id}
               onClick={() => { onChange(m); setOpen(false); }}
               style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
+                display: "flex", alignItems: "flex-start", justifyContent: "space-between",
                 padding: "9px 12px", cursor: "pointer", gap: "12px",
                 background: value.id === m.id ? G.navyXLight : "transparent",
                 transition: "background 0.1s",
@@ -444,9 +452,12 @@ function ModelSelector({ models, value, onChange }: {
               <div>
                 <div style={{ fontSize: "13px", fontWeight: value.id === m.id ? 600 : 400, color: G.textPrimary }}>{m.label}</div>
                 <div style={{ fontSize: "11px", color: G.textMuted }}>{m.sub}</div>
+                {m.hint && (
+                  <div style={{ fontSize: "11px", color: G.textSecondary, lineHeight: "1.4", marginTop: "3px" }}>{m.hint}</div>
+                )}
               </div>
               {value.id === m.id && (
-                <Check size={13} strokeWidth={2.5} color={G.navy} />
+                <Check size={13} strokeWidth={2.5} color={G.navy} style={{ flexShrink: 0, marginTop: "2px" }} />
               )}
             </div>
           ))}

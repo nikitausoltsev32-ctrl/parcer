@@ -27,8 +27,8 @@ function Slide0({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "0 28px" }}>
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-        <div style={{ position: "absolute", width: "260px", height: "260px", borderRadius: "50%", background: "radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%)", animation: "obPulse 3s ease-in-out infinite" }} />
-        <div style={{ position: "absolute", width: "340px", height: "340px", borderRadius: "50%", border: "1px solid rgba(255,255,255,0.06)", animation: "obPulse 3.5s 0.5s ease-in-out infinite" }} />
+        <div style={{ position: "absolute", width: "260px", height: "260px", borderRadius: "50%", background: "radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%)", animation: "obPulse 3s ease-in-out infinite", willChange: "transform, opacity" }} />
+        <div style={{ position: "absolute", width: "340px", height: "340px", borderRadius: "50%", border: "1px solid rgba(255,255,255,0.06)", animation: "obPulse 3.5s 0.5s ease-in-out infinite", willChange: "transform, opacity" }} />
         <div style={{ width: "110px", height: "110px", borderRadius: "28px", background: "rgba(255,255,255,0.12)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 24px 64px rgba(0,0,0,0.30)", animation: "obScaleIn 0.6s cubic-bezier(0.16,1,0.3,1) both", position: "relative", zIndex: 2 }}>
           <svg width="60" height="60" viewBox="0 0 52 52" fill="none"><rect x="13" y="13" width="5.5" height="26" rx="2.5" fill="white"/><rect x="13" y="33.5" width="24" height="5.5" rx="2.5" fill="white"/><line x1="21" y1="13" x2="37" y2="22" stroke="white" strokeWidth="3" strokeLinecap="round" opacity="0.6"/></svg>
         </div>
@@ -38,7 +38,7 @@ function Slide0({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) 
           { text: "Авто", bottom: "18%", left: "2%", delay: "0.3s" },
           { text: "CRM", bottom: "12%", right: "2%", delay: "0.2s" },
         ].map(p => (
-          <div key={p.text} style={{ position: "absolute", top: p.top, bottom: p.bottom, left: p.left, right: p.right, padding: "7px 16px", borderRadius: "24px", background: "rgba(255,255,255,0.12)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.22)", fontSize: "13px", fontWeight: 700, color: "rgba(255,255,255,0.9)", boxShadow: "0 4px 20px rgba(0,0,0,0.15)", animation: `obFloat 3.5s ${p.delay} ease-in-out infinite`, zIndex: 1 }}>{p.text}</div>
+          <div key={p.text} style={{ position: "absolute", top: p.top, bottom: p.bottom, left: p.left, right: p.right, padding: "7px 16px", borderRadius: "24px", background: "rgba(255,255,255,0.12)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.22)", fontSize: "13px", fontWeight: 700, color: "rgba(255,255,255,0.9)", boxShadow: "0 4px 20px rgba(0,0,0,0.15)", animation: `obFloat 3.5s ${p.delay} ease-in-out infinite`, willChange: "transform", zIndex: 1 }}>{p.text}</div>
         ))}
       </div>
       <div style={{ paddingBottom: "40px", animation: "obFadeUp 0.5s 0.2s cubic-bezier(0.16,1,0.3,1) both" }}>
@@ -58,7 +58,7 @@ function Slide1() {
     <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "0 28px" }}>
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
         {[{ label: "2ГИС", color: "#60b4ff", top: "8%", left: "2%" }, { label: "SerpAPI", color: "#5eead4", top: "5%", right: "0%" }, { label: "Firecrawl", color: "#fbbf24", bottom: "18%", right: "2%" }].map(b => (
-          <div key={b.label} style={{ position: "absolute", top: b.top, left: b.left, right: b.right, bottom: b.bottom, padding: "6px 14px", borderRadius: "20px", background: "rgba(255,255,255,0.10)", backdropFilter: "blur(12px)", border: `1px solid ${b.color}55`, fontSize: "12.5px", fontWeight: 700, color: b.color, animation: "obFloat 3.5s ease-in-out infinite" }}>{b.label}</div>
+          <div key={b.label} style={{ position: "absolute", top: b.top, left: b.left, right: b.right, bottom: b.bottom, padding: "6px 14px", borderRadius: "20px", background: "rgba(255,255,255,0.10)", backdropFilter: "blur(12px)", border: `1px solid ${b.color}55`, fontSize: "12.5px", fontWeight: 700, color: b.color, animation: "obFloat 3.5s ease-in-out infinite", willChange: "transform" }}>{b.label}</div>
         ))}
         <div style={{ background: "rgba(255,255,255,0.10)", backdropFilter: "blur(24px)", border: "1px solid rgba(255,255,255,0.20)", borderRadius: "22px", padding: "20px", width: "100%", maxWidth: "300px", boxShadow: "0 24px 64px rgba(0,0,0,0.25)", animation: "obScaleIn 0.5s 0.1s cubic-bezier(0.16,1,0.3,1) both" }}>
           <div style={{ fontSize: "10px", fontWeight: 800, color: "rgba(255,255,255,0.45)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "14px" }}>Найдено · 7 компаний</div>
@@ -86,7 +86,7 @@ function Slide2() {
           Да, интересно! Расскажите подробнее о ваших услугах…
           <div style={{ marginTop: "8px" }}><span style={{ padding: "3px 10px", borderRadius: "12px", background: "rgba(45,122,95,0.12)", color: "#1e6040", fontSize: "11px", fontWeight: 700 }}>Интерес ✓</span></div>
         </div>
-        <div style={{ position: "absolute", top: "8px", left: "0px", padding: "6px 14px", borderRadius: "20px", background: "rgba(255,255,255,0.10)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.20)", fontSize: "12px", fontWeight: 600, color: "#fbbf24", animation: "obFloat 3s 0.2s ease-in-out infinite", display: "flex", gap: "6px", alignItems: "center" }}>
+        <div style={{ position: "absolute", top: "8px", left: "0px", padding: "6px 14px", borderRadius: "20px", background: "rgba(255,255,255,0.10)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.20)", fontSize: "12px", fontWeight: 600, color: "#fbbf24", animation: "obFloat 3s 0.2s ease-in-out infinite", willChange: "transform", display: "flex", gap: "6px", alignItems: "center" }}>
           <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#fbbf24", boxShadow: "0 0 8px #fbbf24" }} /> Follow-up через 3 дня
         </div>
       </div>
@@ -133,7 +133,7 @@ function Slide4({ answers, setAnswers }: { answers: Record<string, string>; setA
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "0 28px" }}>
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ width: "130px", height: "130px", borderRadius: "50%", border: "2px dashed rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", animation: "obPulse 4s ease-in-out infinite" }}>
+        <div style={{ width: "130px", height: "130px", borderRadius: "50%", border: "2px dashed rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", animation: "obPulse 4s ease-in-out infinite", willChange: "transform, opacity" }}>
           <div style={{ width: "90px", height: "90px", borderRadius: "50%", background: "rgba(255,255,255,0.08)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg>
           </div>
