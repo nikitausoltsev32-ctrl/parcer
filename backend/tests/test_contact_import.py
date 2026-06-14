@@ -117,8 +117,15 @@ async def test_contacts_import_confirm_creates_contact_list_and_contacts(client,
     assert contacts[0].raw["company"] == "Company 0"
 
 
-async def test_contacts_import_enforces_trial_contact_limit(client):
+async def test_contacts_import_enforces_trial_contact_limit(client, db_session):
     headers = await _auth_headers(client, "limit-import@test.com")
+    # Registration defaults to plan="dev" (unlimited) outside production; the trial cap
+    # only applies to trial users, so force the trial plan to exercise it.
+    user = (
+        await db_session.execute(select(User).where(User.email == "limit-import@test.com"))
+    ).scalar_one()
+    user.plan = "trial"
+    await db_session.commit()
 
     response = await client.post(
         "/api/v1/contacts/import?confirmed=true",
