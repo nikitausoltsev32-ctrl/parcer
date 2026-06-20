@@ -1,0 +1,3 @@
+## 2026-05-10 - Custom Control Accessibility
+**Learning:** When building custom controls (like the tone selector cards), they lose native accessibility features. Screen readers cannot interpret them as radio buttons without explicit ARIA roles (radiogroup/radio) and state (aria-checked). They also become inaccessible to keyboard users unless explicitly made focusable via tabIndex and given keyboard event handlers (onKeyDown for Enter/Space).
+**Action:** Always test custom interactive elements with keyboard-only navigation. If an element functions like a standard HTML control (e.g., radio group, select), it must replicate the native ARIA roles and keyboard interactions.

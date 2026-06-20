@@ -82,8 +82,9 @@ export default function SetupWizard({ onDone }: Props) {
         {step === 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div>
-              <label style={{ fontSize: "12.5px", fontWeight: 600, color: "#555", display: "block", marginBottom: "6px" }}>Ваше имя</label>
+              <label htmlFor="fullName" style={{ fontSize: "12.5px", fontWeight: 600, color: "#555", display: "block", marginBottom: "6px" }}>Ваше имя</label>
               <input
+                id="fullName"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Иван Иванов"
@@ -92,8 +93,9 @@ export default function SetupWizard({ onDone }: Props) {
               />
             </div>
             <div>
-              <label style={{ fontSize: "12.5px", fontWeight: 600, color: "#555", display: "block", marginBottom: "6px" }}>Город / регион</label>
+              <label htmlFor="city" style={{ fontSize: "12.5px", fontWeight: 600, color: "#555", display: "block", marginBottom: "6px" }}>Город / регион</label>
               <input
+                id="city"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
                 placeholder="Москва"
@@ -107,8 +109,9 @@ export default function SetupWizard({ onDone }: Props) {
         {step === 1 && (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div>
-              <label style={{ fontSize: "12.5px", fontWeight: 600, color: "#555", display: "block", marginBottom: "6px" }}>Чем занимается ваш бизнес?</label>
+              <label htmlFor="business" style={{ fontSize: "12.5px", fontWeight: 600, color: "#555", display: "block", marginBottom: "6px" }}>Чем занимается ваш бизнес?</label>
               <textarea
+                id="business"
                 value={business}
                 onChange={(e) => setBusiness(e.target.value)}
                 placeholder="Разрабатываем мобильные приложения для малого бизнеса"
@@ -118,8 +121,9 @@ export default function SetupWizard({ onDone }: Props) {
               />
             </div>
             <div>
-              <label style={{ fontSize: "12.5px", fontWeight: 600, color: "#555", display: "block", marginBottom: "6px" }}>Что предлагаете клиентам?</label>
+              <label htmlFor="offer" style={{ fontSize: "12.5px", fontWeight: 600, color: "#555", display: "block", marginBottom: "6px" }}>Что предлагаете клиентам?</label>
               <textarea
+                id="offer"
                 value={offer}
                 onChange={(e) => setOffer(e.target.value)}
                 placeholder="Разработка MVP за 4 недели с фиксированной ценой"
@@ -132,11 +136,20 @@ export default function SetupWizard({ onDone }: Props) {
 
         {/* Step 2: tone */}
         {step === 2 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div role="radiogroup" aria-label="Тон писем" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {TONES.map((t) => (
               <div
                 key={t.id}
+                role="radio"
+                aria-checked={tone === t.id}
+                tabIndex={0}
                 onClick={() => setTone(t.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setTone(t.id);
+                  }
+                }}
                 style={{
                   border: `2px solid ${tone === t.id ? SAGE : "rgba(0,0,0,0.1)"}`,
                   borderRadius: "10px",
